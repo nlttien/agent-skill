@@ -133,3 +133,9 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Root Cause**: Profile console tách bước: get_doc 66ms, save 0.4s, **frappe.rename_doc 2.2s** — nó quét link fields trên toàn bộ database (hàng trăm bảng ERPNext) để cập nhật Link trỏ tới doc, kể cả khi không bảng nào Link tới.
 - **Fix Applied**: Verify `get_link_fields("Steam Account") == []` → rename bằng 3 câu SQL trực tiếp: UPDATE name trong bảng chính, UPDATE `parent` trong child table (`Steam Account Game`), UPDATE `name` trong `__Auth` (password field), rồi `frappe.clear_cache(doctype=...)`. Kết quả: **2.3s → 0.09–0.29s**, games + mật khẩu decay nguyên vẹn (đã verify).
 - **Prevention Rule**: (1) Trước khi dùng `frappe.rename_doc`, check `get_link_fields(doctype)` — nếu rỗng, SQL trực tiếp nhanh gấp ~20 lần. (2) Thiết kế doctype mới: cân nhắc autoname docname thay vì đặt docname theo tên người dùng nhập — đổi "tên hiển thị" không nên đồng nghĩa đổi khoá chính. (3) Khi điều tra chậm: profile từng bước trong bench console (`time.time()` quanh mỗi call) thay vì đo cả HTTP.
+
+### [W9] Bẫy đa triển khai (multi-deployment): "fix rồi mà vẫn vậy" = user đang chạy app ở MÁY KHÁC
+- **Symptom**: Fix + browser-verify end-to-end trên .113 xong xuôi, user vẫn báo "vẫn vậy" 3 lần liên tiếp.
+- **Root Cause**: App chạy **nhiều nơi trong LAN**: .113 (dev tôi deploy) và **.228:80 prod + .228:5173 vite dev** (build khác, không có fix, dữ liệu thật nằm ở BE .228). User test trên .228 — mọi fix trên .113 vô nghĩa với họ.
+- **Detection**: khi user báo lỗi UI nhưng browser-verify của tôi pass — probe LAN (`curl -m 2` các IP:80/5173/8080 quen thuộc), so sánh build hash `assets/index-*.js` giữa các nơi.
+- **Prevention Rule**: (1) Đầu phiên làm việc, hỏi/chốt URL app user đang dùng (địa chỉ + port). (2) Sau khi fix, confirm build hash user đang tải (F12 Network) trùng bản mới. (3) Ghi danh sách deployments vào AGENTS.md của repo.
