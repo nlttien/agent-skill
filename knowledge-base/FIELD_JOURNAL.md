@@ -118,3 +118,12 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - Người phụ trách Aion 2: field `assigned_to` (Link User) trên character; set 1 lần cập nhật toàn bộ character cùng email (như PC/Player/Gearup); FE badge 🛡️ tím trên header nhóm.
 - Component pattern của repo: `components/booster/` — modal dùng `v-model` + props dữ liệu + emit `changed`/`saved` về view refresh; logic mức dòng ở `composables/useBoosterRow.js`, mail ở `useBoosterMailSync.js`.
 - Chống mìn tương lai: mỗi lần refactor xong PHẢI browser-verify từng route; PR nhỏ theo chặng, gate `lint → build → prettier → format:check → test` trước mỗi push.
+
+### [W7] Self-verify bằng browser thật trước khi bàn giao (quy trình chuẩn từ 2026-10-10)
+- **Vấn đề**: Gate (lint/build/test) không bắt lỗi runtime (TDZ [W1], API component sai [W2]) → người dùng thành người test đầu tiên.
+- **Quy trình đã chứng minh** (khoảng 5 phút, chạy được ngay):
+  1. **User test trên .113**: bench console (script flat) — `agent_test@gege.vn` / `AgentTest#2026`, roles `Game Currency Admin` + `Booster`; set password qua `u.new_password = ...; u.save()`. Verify bằng `curl POST /api/method/login`.
+  2. **SSH tunnel**: `ssh -N -L 8080:127.0.0.1:80 frappe@192.168.2.113` chạy background (không dùng `&` trong lệnh thường — bị chết theo shell) → app truy cập được tại `http://localhost:8080`.
+  3. **Browser skill (browser-use:control-browser)**: mở tab → login form (fill 2 textbox theo placeholder + nút "🚀 Bắt đầu") → `goto` từng route → `domSnapshot()` đo độ dài + marker từ khóa → thử thao tác thật (VD: select người phụ trách) → đối chiếu DB bằng bench console.
+- **Chuẩn đỗ route**: snapshot có nội dung thực (marker/domain data hiển thị), KHÔNG chỉ navbar. Lưu ý: snapshot ngắn chưa chắc lỗi — có thể chỉ là dữ liệu ít (Aion2 1 account test = 1.6K ký tự hợp lệ); đối chiếu marker + heading.
+- **Prevention Rule**: sau mỗi deploy FE lên .113, LUÔN chạy quy trình này qua các route vừa đụng trước khi báo user "xong".
