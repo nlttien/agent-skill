@@ -127,3 +127,9 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
   3. **Browser skill (browser-use:control-browser)**: mở tab → login form (fill 2 textbox theo placeholder + nút "🚀 Bắt đầu") → `goto` từng route → `domSnapshot()` đo độ dài + marker từ khóa → thử thao tác thật (VD: select người phụ trách) → đối chiếu DB bằng bench console.
 - **Chuẩn đỗ route**: snapshot có nội dung thực (marker/domain data hiển thị), KHÔNG chỉ navbar. Lưu ý: snapshot ngắn chưa chắc lỗi — có thể chỉ là dữ liệu ít (Aion2 1 account test = 1.6K ký tự hợp lệ); đối chiếu marker + heading.
 - **Prevention Rule**: sau mỗi deploy FE lên .113, LUÔN chạy quy trình này qua các route vừa đụng trước khi báo user "xong".
+
+### [W8] frappe.rename_doc chậm ~2s trên DB ERPNext lớn — rename SQL trực tiếp khi không có Link field
+- **Symptom**: Đổi tên Steam Account qua API mất ~2–2.3s (user thấy "rất tốn thời gian"), dù đã tắt `rebuild_search` + bỏ double-save.
+- **Root Cause**: Profile console tách bước: get_doc 66ms, save 0.4s, **frappe.rename_doc 2.2s** — nó quét link fields trên toàn bộ database (hàng trăm bảng ERPNext) để cập nhật Link trỏ tới doc, kể cả khi không bảng nào Link tới.
+- **Fix Applied**: Verify `get_link_fields("Steam Account") == []` → rename bằng 3 câu SQL trực tiếp: UPDATE name trong bảng chính, UPDATE `parent` trong child table (`Steam Account Game`), UPDATE `name` trong `__Auth` (password field), rồi `frappe.clear_cache(doctype=...)`. Kết quả: **2.3s → 0.09–0.29s**, games + mật khẩu decay nguyên vẹn (đã verify).
+- **Prevention Rule**: (1) Trước khi dùng `frappe.rename_doc`, check `get_link_fields(doctype)` — nếu rỗng, SQL trực tiếp nhanh gấp ~20 lần. (2) Thiết kế doctype mới: cân nhắc autoname docname thay vì đặt docname theo tên người dùng nhập — đổi "tên hiển thị" không nên đồng nghĩa đổi khoá chính. (3) Khi điều tra chậm: profile từng bước trong bench console (`time.time()` quanh mỗi call) thay vì đo cả HTTP.
