@@ -1,11 +1,11 @@
-# ⚡ ExileApi Agent Skill Router Pack
+# 🤖 Agent Skill
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20.NET%2010-blue.svg)](https://dotnet.microsoft.com/)
 [![Framework](https://img.shields.io/badge/Architecture-reverse--skill-magenta.svg)](https://github.com/zhaoxuya520/reverse-skill)
 [![Compatibility](https://img.shields.io/badge/AI%20Clients-Claude%20Code%20%7C%20Cursor%20%7C%20Cline%20%7C%20Antigravity-green.svg)](#supported-ai-clients)
 
-> **ExileApi / Path of Exile Engineering Skill Router Pack**  
+> **Agent Skill** (trước đây *ExileApi Agent Skill Router Pack*)  
 > AI-powered routing + On-demand toolchain bootstrapping + Self-evolving knowledge base  
 > Designed for **ExileApi**, **AutoExile**, **ShopAutoBuyer**, **ExchangeCollector**, and game memory reverse engineering.
 
@@ -35,7 +35,7 @@ User Prompt (Bug / Feature / Reversing)
 ## 📁 Repository Structure
 
 ```
-exileapi-agent-skill/
+agent-skill/
 ├── AGENTS.md                  # Main entrypoint and agent prompt context
 ├── RULES.md                   # Global memory safety & execution constraints
 ├── MASTER-ROUTING.md          # Deterministic R0-R7 routing ladder
@@ -86,7 +86,7 @@ exileapi-agent-skill/
 Copy this folder into your project root as `.agents/`:
 ```bash
 # In your ExileApi workspace root:
-git clone https://github.com/nlttien/exileapi-agent-skill.git .agents
+git clone https://github.com/nlttien/agent-skill.git .agents
 ```
 
 ### 2. Validate Environment Health
