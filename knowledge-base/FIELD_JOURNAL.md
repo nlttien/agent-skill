@@ -73,3 +73,48 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
   2. **Off-Screen Navigation**: Clamped `Camera.WorldToScreen` coordinates within viewport bounds `[150, Width-150]` when clicking 3D stash entities, commanding the character to walk towards off-screen stashes until they become visible and open.
   3. **Deposit Throttling**: Added a 2.5s retry throttle (`_lastDepositAttemptTime`) in `ShopAutoBuyer.cs` to prevent infinite per-frame restart loops on failed deposits.
 - **Prevention Rule**: Always implement coordinate clamping for 3D interactable entities to allow natural character pathfinding towards off-screen targets, and always provide graceful fallbacks between Guild Stash and Personal Stash.
+
+---
+
+## [2026-10-10] Acc Manager — Web app (Vue 3 + Frappe) session lessons
+
+### [W1] Trang SPA trắng sau refactor: TDZ trong `<script setup>`
+- **Target**: `Account-manager/src/views/BoosterAccountsView.vue` (repo GegeTeamCode/Account-manager)
+- **Symptom**: Vào `/booster-accounts` content trống tuyệt đối (sidebar cha vẫn render). Lint 0 warning, build xanh, test pass.
+- **Root Cause**: Lời gọi `useBoosterMailSync({ items, ... })` nằm ở dòng 334 nhưng `const items = ref([])` khai báo ở dòng 419. `<script setup>` chạy tuần tự → `ReferenceError: Cannot access 'items' before initialization` → component crash ngay setup, không có error boundary.
+- **Fix Applied**: Di chuyển lời gọi composable xuống ngay sau khai báo `items`. Quét lại mọi composable call còn lại theo thứ tự khai báo (commit `e05ce00`).
+- **Prevention Rule**: (1) Khi tách composable khỏi view, đặt lời gọi LUÔN sau các ref nó nhận vào. (2) Lint/build KHÔNG bắt lỗi runtime TDZ — sau mỗi đợt refactor view phải tự mở từng route bằng browser thật để verify, không chỉ tin gate.
+
+### [W2] Modal không bao giờ mở: sai API component ModalWrapper
+- **Target**: `ModalWrapper.vue` + các modal trong BoosterAccountsView
+- **Symptom**: Bấm nút mở modal không có gì xảy ra ("không click vào được"), kéo dài nhiều ngày.
+- **Root Cause**: Template dùng `:show="x"`, `:title`, `@close` — ModalWrapper chỉ có `modelValue` (v-model). `v-if="modelValue"` luôn falsy → modal không render. Code cũ "đoán" API không tồn tại.
+- **Fix Applied**: Chuyển hết sang `v-model` + thêm prop `title` thật cho ModalWrapper (render header chuẩn h3 + ✕ khi không có slot #header). Quét toàn app `:show=` sai — không còn.
+- **Prevention Rule**: Trước khi dùng component, đọc `defineProps/defineEmits` của nó — không đoán API theo tên props quen thuộc. Pattern chuẩn modal của repo: `v-model` bật/tắt + slot `#header` hoặc prop `title`.
+
+### [W3] Frappe `rename_doc` không nhận `ignore_permissions` + doctype phải bật `allow_rename`
+- **Target**: `gege_custom/api/steam_account.py`, `api/booster_account.py`, doctype Steam Account / Booster Account
+- **Symptom**: Sửa tên account (FE modal) báo `TypeError: rename_doc() got an unexpected keyword argument 'ignore_permissions'`; vá xong lộ tiếp `ValidationError: not allowed to be renamed`.
+- **Root Cause**: Frappe v15 `frappe.rename_doc(doctype, old, new, force, merge, *, ignore_if_exists, show_alert, rebuild_search)` — không có `ignore_permissions`; và guard `if not (force or ignore_permissions) and not meta.allow_rename: throw` đòi doctype bật `allow_rename: 1`.
+- **Fix Applied**: Bỏ keyword `ignore_permissions`; bật `"allow_rename": 1` trong JSON của Steam Account + Booster Account rồi `bench migrate`. Test live rename + revert OK (commit `2ee6cb3`, `8b226cb`).
+- **Prevention Rule**: Đổi tên doc (rename docname) cần 2 điều: API gọi đúng signature bản Frappe đang dùng (`inspect.signature` để check) + doctype có `allow_rename: 1`. Đặt `show_alert=False` khi gọi từ API nội bộ.
+
+### [W4] `bench console` qua SSH nuốt block indent — viết script flat
+- **Symptom**: Pipe script python có khối `if`/vòng lặp indent vào `bench --site X console` qua ssh: IPython in lẫn lộn `...:`, block không chạy, thỉnh thoảng tự exit.
+- **Root Cause**: IPython đọc stdin theo line-mode, xử lý continuation line qua pipe tệ.
+- **Fix Applied**: Script test viết FLAT — mỗi dòng 1 lệnh, không indent block (dùng biến trung gian thay if). Grep output để lọc: chuỗi prefix `In [n]:` làm grep anchor `^` trượt — grep không anchor.
+- **Prevention Rule**: Vẫn theo bài học cũ "file本地 → scp → chạy": với bench console, script phải flat-lines; thao tác file phức tạp thì viết `python3 /tmp/patch.py` riêng, KHÔNG nhét qua console.
+
+### [W5] Port code giữa 2 repo: lấy kết quả cuối + tôn trọng các strip của repo đích
+- **Symptom**: Port 12 commit từ Custom-UI-GeGe-Currency sang Account-manager; commit đầu push thiếu phần strip platform Steam/Client (phải fixup); mất 3 lần build vì boundary cắt hỏng template.
+- **Root Cause**: (1) `git add` sót file đã stage-một-phần (trạng thái MM). (2) Cắt template theo dòng mà không hiểu cấu trúc slot (PaginatedListLayout có `#header` và `#filters` là 2 slot riêng — `#filters` có sticky riêng, KHÔNG được gộp vào 1 component). (3) Dedent `[8:]` ăn mất dòng có indent < 8 spaces làm mất tag đóng.
+- **Fix Applied**: Port theo "kết quả cuối" (`git checkout <commit> -- <files>`) thay vì cherry-pick từng commit; không dedent (để prettier format); verify cặp `<template>` mở/đóng bằng đếm opens vs closes; cắt đúng ranh giới slot.
+- **Prevention Rule**: Khi port nhiều commit giữa repo: mang thẳng bản cuối, áp lại bằng tay các thay đổi có chủ đích của repo đích (như strip platform); `git add` xong kiểm tra `git status` không còn MM; template surgery thì dùng compiler-sfc parse để tìm lỗi vị trí thay vì đoán.
+
+### [W6] Quy hoạch repo Acc Manager (10-2026)
+- Repo chính FE từ 2026-10-10: **GegeTeamCode/Account-manager** (đã đủ 4 tab: Booster Accounts / Outlook Mail / Aion 2 / Steam Accounts). Server .113 `/home/frappe/trader-ui` đã trỏ origin sang repo này, chạy branch `port/booster-session` (PR #1 chờ merge; sau merge đổi sang `main`).
+- Repo cũ `nlttien/Custom-UI-GeGe-Currency` = archive, không làm việc nữa.
+- BE vẫn repo `GegeTeamCode/frappe-erp15-gegecurrency` branch `feat/booster-account-mgmt`, sửa trực tiếp trên .113 rồi commit push; thay đổi doctype → `bench migrate` + `supervisorctl restart`.
+- Người phụ trách Aion 2: field `assigned_to` (Link User) trên character; set 1 lần cập nhật toàn bộ character cùng email (như PC/Player/Gearup); FE badge 🛡️ tím trên header nhóm.
+- Component pattern của repo: `components/booster/` — modal dùng `v-model` + props dữ liệu + emit `changed`/`saved` về view refresh; logic mức dòng ở `composables/useBoosterRow.js`, mail ở `useBoosterMailSync.js`.
+- Chống mìn tương lai: mỗi lần refactor xong PHẢI browser-verify từng route; PR nhỏ theo chặng, gate `lint → build → prettier → format:check → test` trước mỗi push.
