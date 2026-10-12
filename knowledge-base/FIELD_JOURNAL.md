@@ -139,3 +139,9 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Root Cause**: App chạy **nhiều nơi trong LAN**: .113 (dev tôi deploy) và **.228:80 prod + .228:5173 vite dev** (build khác, không có fix, dữ liệu thật nằm ở BE .228). User test trên .228 — mọi fix trên .113 vô nghĩa với họ.
 - **Detection**: khi user báo lỗi UI nhưng browser-verify của tôi pass — probe LAN (`curl -m 2` các IP:80/5173/8080 quen thuộc), so sánh build hash `assets/index-*.js` giữa các nơi.
 - **Prevention Rule**: (1) Đầu phiên làm việc, hỏi/chốt URL app user đang dùng (địa chỉ + port). (2) Sau khi fix, confirm build hash user đang tải (F12 Network) trùng bản mới. (3) Ghi danh sách deployments vào AGENTS.md của repo.
+
+### [W10] Steam Guard code: pattern 5 ký tự phải bắt buộc có CHỮ SỐ
+- **Symptom**: Trích mã Steam Guard từ mail thật → trả về chữ "email" làm mã (false-positive; mail Steam có cụm "Steam Guard code" + từ 5 ký tự liền).
+- **Root Cause**: Regex `[A-Z0-9]{5}` + IGNORECASE match mọi từ 5 chữ cái; mail Steam nhiều từ tiếng Anh 5 ký tự ("email", "click"...).
+- **Fix Applied**: Lọc match phải `any(ch.isdigit())` (mã Steam Guard luôn chứa số) cho cả nhánh label lẫn standalone-line. Verify mail thật: hết false-positive; khi không có mail Steam mới → báo "không tìm thấy" + show nội dung mail gần nhất.
+- **Prevention Rule**: Regex trích mã OTP phải có ràng buộc hỗn hợp chữ+số (hoặc format chặt), đừng tin độ dài một mình; test với mail thật trước khi bàn giao.
