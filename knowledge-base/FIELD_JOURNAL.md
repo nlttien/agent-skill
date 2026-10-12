@@ -145,3 +145,9 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Root Cause**: Regex `[A-Z0-9]{5}` + IGNORECASE match mọi từ 5 chữ cái; mail Steam nhiều từ tiếng Anh 5 ký tự ("email", "click"...).
 - **Fix Applied**: Lọc match phải `any(ch.isdigit())` (mã Steam Guard luôn chứa số) cho cả nhánh label lẫn standalone-line. Verify mail thật: hết false-positive; khi không có mail Steam mới → báo "không tìm thấy" + show nội dung mail gần nhất.
 - **Prevention Rule**: Regex trích mã OTP phải có ràng buộc hỗn hợp chữ+số (hoặc format chặt), đừng tin độ dài một mình; test với mail thật trước khi bàn giao.
+
+### [W11] Hai phiên agent song song trên cùng repo: file bị ghi đè giữa chừng
+- **Symptom**: Debug edits vừa viết biến mất (working tree clean dù chưa commit); file rơi vào trạng thái lai (mảnh code mới + block cũ, mất định nghĩa hàm nhưng còn lời gọi) — build vẫn xanh vì mảnh lai tình cờ hợp lệ, runtime sai.
+- **Root Cause**: Một phiên agent khác chạy đồng thời trên cùng thư mục làm việc, rebase/checkout/ghi file đè lên edits của phiên này.
+- **Detection**: (1) `git status` clean dù vừa sửa → nghi ngay ghi đè. (2) Edit no-op: `str.replace` cũ KHÔNG assert count vẫn in OK — mọi python patch PHẢI `assert count == 1` trước/sau replace. (3) So marker trong file thật (grep/sed) thay vì tin rằng lần sửa trước đã ăn.
+- **Prevention Rule**: (1) Mọi patch bằng python phải assert số lần match. (2) Khi nghi song song: `git reflog` + `git log` so commit không phải của mình + chốt với user "một repo một phiên tại một thời điểm". (3) Deploy .113 phải luôn theo chu trình commit→push→fetch→reset→build — build trên cây bẩn là build ảo.
