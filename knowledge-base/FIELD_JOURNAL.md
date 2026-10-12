@@ -164,3 +164,9 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
   - Fallback timestamp: Dùng `int(time.time() * 1000)` thay cho naive `now_datetime().timestamp()`.
   - FE: Nhập bao nhiêu lưu bấy nhiêu (`Math.max(0, Math.min(val, max))`).
 - **Prevention Rule**: (1) Tuyệt đối không gọi `.timestamp()` trên naive datetime trong Python khi server chạy khác múi giờ UTC. Luôn gán `tzinfo=timezone.utc` hoặc dùng timezone-aware. (2) `frappe.utils.get_datetime()` không parse được số epoch float/int — phải dùng `fromtimestamp` / `utcfromtimestamp`.
+
+### [W13] Clipboard API trên Insecure Context (HTTP / IP LAN) bị chặn gây lỗi "Copy thất bại"
+- **Symptom**: Nút copy trên app chạy qua mạng LAN (http://192.168.2.113) bị báo "Copy thất bại" khi người dùng click vào icon sao chép (Steam login, mật khẩu, text...).
+- **Root Cause**: `navigator.clipboard.writeText` theo tiêu chuẩn W3C chỉ được phép hoạt động trong Secure Context (HTTPS hoặc localhost). Khi web app chạy trên HTTP thuần qua IP LAN nội bộ (`http://192.168.x.x`), trình duyệt (Chrome, Edge, Firefox) chặn `navigator.clipboard` (bị undefined hoặc ném `NotAllowedError` / `SecurityError`). Việc gọi trực tiếp `await navigator.clipboard.writeText()` mà không có fallback khiến luồng nhảy vào `catch` và báo "Copy thất bại".
+- **Fix Applied**: Tạo utility `copyToClipboard` kiểm tra `window.isSecureContext` trước khi gọi `navigator.clipboard`, và luôn có fallback qua `textarea` ẩn + `document.execCommand('copy')` để đảm bảo sao chép thành công 100% trên cả HTTP LAN lẫn HTTPS.
+- **Prevention Rule**: Không bao giờ gọi trực tiếp `navigator.clipboard.writeText` mà không có fallback `document.execCommand('copy')` trong các ứng dụng nội bộ chạy trên HTTP / IP LAN.
