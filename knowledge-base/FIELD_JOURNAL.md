@@ -151,3 +151,16 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Root Cause**: Một phiên agent khác chạy đồng thời trên cùng thư mục làm việc, rebase/checkout/ghi file đè lên edits của phiên này.
 - **Detection**: (1) `git status` clean dù vừa sửa → nghi ngay ghi đè. (2) Edit no-op: `str.replace` cũ KHÔNG assert count vẫn in OK — mọi python patch PHẢI `assert count == 1` trước/sau replace. (3) So marker trong file thật (grep/sed) thay vì tin rằng lần sửa trước đã ăn.
 - **Prevention Rule**: (1) Mọi patch bằng python phải assert số lần match. (2) Khi nghi song song: `git reflog` + `git log` so commit không phải của mình + chốt với user "một repo một phiên tại một thời điểm". (3) Deploy .113 phải luôn theo chu trình commit→push→fetch→reset→build — build trên cây bẩn là build ảo.
+
+### [W12] Lệch timezone naive datetime làm sai lệch logic chu kỳ hồi phục (+30 NL)
+- **Symptom**: Khi cập nhật Năng lượng trong Aion 2 (ví dụ nhập 0), sau khi lưu giá trị hiển thị tự động nhảy lên thành 30 (nhập 630 nhảy thành 660).
+- **Root Cause**:
+  1. `sync_aion2_resources` gọi `frappe.utils.get_datetime(int(timestamp_ms) / 1000)` truyền số timestamp float/int -> `frappe.utils.get_datetime` chỉ nhận string date hoặc datetime object nên trả về `None`, khiến `resource_timestamp` lưu thành `NULL` trong DB.
+  2. Khi serialize dữ liệu ra FE (`_serialize`), `doc.resource_timestamp` bị `None` nên fallback sang `frappe.utils.now_datetime().timestamp() * 1000`. Nhưng `now_datetime()` là naive UTC datetime, khi gọi `.timestamp()` trong Python trên máy chủ có OS timezone `Asia/Ho_Chi_Minh (UTC+7)`, Python hiểu đó là local time và lùi 7 tiếng về quá khứ (-7h).
+  3. FE có logic đếm chu kỳ hồi phục 3h: 7h trôi qua tương đương `floor(7/3) = 2 chu kỳ`. Với VIP hồi 15 NL/chu kỳ, 2 x 15 = 30 NL! Khiến giá trị vừa lưu lập tức bị FE tính dồn thêm 30 điểm.
+- **Fix Applied**:
+  - Backend: Dùng `datetime.datetime.utcfromtimestamp(float(timestamp_ms) / 1000)` để parse epoch ms chuẩn xác vào DB.
+  - `_to_ms`: Gán `tzinfo=datetime.timezone.utc` cho naive datetime trước khi gọi `.timestamp() * 1000`.
+  - Fallback timestamp: Dùng `int(time.time() * 1000)` thay cho naive `now_datetime().timestamp()`.
+  - FE: Nhập bao nhiêu lưu bấy nhiêu (`Math.max(0, Math.min(val, max))`).
+- **Prevention Rule**: (1) Tuyệt đối không gọi `.timestamp()` trên naive datetime trong Python khi server chạy khác múi giờ UTC. Luôn gán `tzinfo=timezone.utc` hoặc dùng timezone-aware. (2) `frappe.utils.get_datetime()` không parse được số epoch float/int — phải dùng `fromtimestamp` / `utcfromtimestamp`.
