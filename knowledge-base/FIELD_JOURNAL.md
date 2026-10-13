@@ -183,3 +183,18 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
   2. Khi cả 2 khối đều là \`shrink-0\`, trình duyệt buộc phải xếp chúng cạnh nhau theo thứ tự vật lý, **TUYỆT ĐỐI KHÔNG BAO GIỜ BỊ ĐÈ CHỒNG LÊN NHAU**.
   3. Cắt gọt text thừa của các nút phụ (chữ "Shugo:", "Daily:", "Kinah" không cần thiết) để thanh công cụ luôn siêu gọn gàng (~650px), vừa khít màn hình trên đúng 1 hàng duy nhất mà không bị xuống dòng.
 - **Prevention Rule**: Tuyệt đối không dùng \`flex-shrink: 1\` (\`shrink\`) trên flex item nếu các phần tử con của nó không thể co lại tương ứng (vì sẽ gây lỗi tràn đè chồng lên flex item kế bên). Luôn dùng \`shrink-0\` kết hợp \`min-w-max\` và \`overflow-x-auto\`.
+
+
+### [W15] Frappe DocType validation error "Select cannot be ..." khi lưu giá trị động / custom: Cấm dùng Select field cho dữ liệu mở rộng
+- **Target**: Frappe Framework (DocType Schema & API) / Vue3 Integration.
+- **Symptom**: Khi người dùng thêm hoặc chọn một Class/phân loại đã tuỳ chỉnh trong FE (ví dụ chọn Class là "Spirit master" hoặc class custom), Frappe backend ném ra `ValidationError`: `Class cannot be "Spirit master". It should be one of "", "Gladiator", "Templar", "Assassin", "Ranger", "Sorcerer", "Elementalist", "Cleric", "Chanter"` khiến không thể tạo hoặc cập nhật được nhân vật.
+- **Root Cause**:
+  1. Trong Frappe DocType schema (`aion_2_character.json`), trường `char_class` được cấu hình là `fieldtype: "Select"` với danh sách `options` cố định cứng trong schema.
+  2. Frappe ORM khi gọi `doc.save()` hoặc `doc.insert()` luôn tự động kích hoạt `validate_selects()` trong `Document`, kiểm tra nghiêm ngặt giá trị của mọi trường `Select` phải nằm trong danh sách `options` được định nghĩa trong schema.
+  3. Mặc dù FE cho phép người dùng cấu hình thêm các class tuỳ chỉnh (qua DocType Option / cài đặt hệ thống), backend DocType vẫn bị khoá bởi `fieldtype: "Select"`, dẫn tới lỗi từ chối lưu.
+- **Fix Applied**:
+  1. Chuyển `fieldtype` của trường `char_class` từ `"Select"` sang `"Data"` trong schema DocType `aion_2_character.json` (bỏ `options`).
+  2. Cập nhật bảng `tabDocField` trong CSDL: `UPDATE tabDocField SET fieldtype = 'Data', options = '' WHERE parent = 'Aion 2 Character' AND fieldname = 'char_class'`. Lưu ý: trong MariaDB cột `char_class` vốn dĩ đã là `varchar(140)` nên việc chuyển sang `Data` hoàn toàn tương thích và không làm thay đổi hay mất mát dữ liệu hiện có.
+  3. Xoá cache metadata Frappe bằng `frappe.clear_cache()`.
+  4. Bổ sung `Spirit master` / `Spiritmaster` vào `defaultClassList` và `classBadge` ở FE để có màu sắc và hiển thị đồng bộ.
+- **Prevention Rule**: Với bất kỳ trường nào trong Frappe cho phép người dùng tuỳ biến danh sách ở runtime (custom categories, options do admin thêm bớt), KHÔNG BAO GIỜ đặt `fieldtype: "Select"` trong DocType schema (vì sẽ bị `validate_selects()` chặn cứng). Luôn dùng `fieldtype: "Data"` hoặc `fieldtype: "Link"` trỏ tới DocType danh mục tương ứng.
