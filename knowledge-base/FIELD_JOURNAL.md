@@ -171,14 +171,22 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Fix Applied**: Tạo utility `copyToClipboard` kiểm tra `window.isSecureContext` trước khi gọi `navigator.clipboard`, và luôn có fallback qua `textarea` ẩn + `document.execCommand('copy')` để đảm bảo sao chép thành công 100% trên cả HTTP LAN lẫn HTTPS.
 - **Prevention Rule**: Không bao giờ gọi trực tiếp `navigator.clipboard.writeText` mà không có fallback `document.execCommand('copy')` trong các ứng dụng nội bộ chạy trên HTTP / IP LAN.
 
-### [W14] Responsive thanh công cụ: Tránh flex-wrap gây rớt nhiều hàng dọc, dùng min-w-max + overflow-x-auto
-- **Target**: Vue3 / TailwindCSS (Group Header / Action Bar đa nút).
-- **Symptom**: Khi hiển thị thanh công cụ chứa nhiều badge/nút chức năng (tiêu đề nhóm, người phụ trách, tài khoản game, vé, tiền tệ, nút hành động), trên màn hình hẹp hoặc khi zoom/chia đôi cửa sổ, các nút bị ngắt dòng rơi xuống thành 3-4 hàng xếp chồng dọc nhau, gây vỡ giao diện và chiếm nhiều diện tích dọc.
+### [W14] Responsive thanh công cụ đa nút: Co gọn icon tự động để vừa khít 1 hàng, không xuống dòng
+- **Target**: Vue3 / TailwindCSS (Group Header / Action Bar nhiều nút).
+- **Symptom**: Khi hiển thị thanh công cụ chứa nhiều badge/nút (email, người phụ trách, steam account, các vé, kinah, thêm nv), trên màn hình nhỏ hoặc khi zoom/chia đôi màn hình, các nút bị rớt xuống thành 3-4 dòng xếp chồng dọc nhau (như trong ảnh thực tế).
 - **Root Cause**:
-  1. Sử dụng \`flex-wrap\` và \`flex-col md:flex-row\` trên thanh điều khiển ngang khiến các phần tử tự động bẻ xuống dòng khi chiều ngang container không đủ.
-  2. Các phần tử con không được khoá \`shrink-0\` / \`flex-nowrap\`, khiến chúng bị co lại hoặc rớt hàng không đồng đều.
+  1. Dùng `flex-wrap` hoặc `flex-col md:flex-row`: khi chiều ngang thiếu, trình duyệt tự động bẻ các nút xuống dòng mới.
+  2. Không xử lý responsive thu gọn nội dung text của từng nút phụ, khiến toàn bộ thanh bị phình to bề ngang.
+  3. Lầm tưởng: Ép `min-w-max overflow-x-auto` bắt người dùng cuộn ngang KHÔNG PHẢI là responsive thực sự.
 - **Fix Applied**:
-  1. Loại bỏ hoàn toàn \`flex-wrap\` và \`flex-col\`, thay bằng \`flex items-center justify-between min-w-max flex-nowrap\`.
-  2. Bọc container bên ngoài bằng \`overflow-x-auto scrollbar-hide\` và gắn \`shrink-0 flex-nowrap\` cho các nhóm nút con.
-  3. Kết quả: Toàn bộ thanh công cụ được khoá cố định trên **ĐÚNG 1 HÀNG NGANG DUY NHẤT**; trên màn hình nhỏ người dùng có thể lướt/cuộn ngang mượt mà mà không bao giờ bị vỡ hàng dọc.
-- **Prevention Rule**: Với các thanh công cụ / action bar có nhiều nút tương tác yêu cầu giữ nguyên trên 1 hàng, TUYỆT ĐỐI không dùng \`flex-wrap\`. Luôn dùng \`min-w-max flex-nowrap\` kết hợp \`overflow-x-auto scrollbar-hide\`.
+  1. Loại bỏ `flex-wrap` và `flex-col`, dùng `w-full flex items-center justify-between gap-1 sm:gap-2.5`.
+  2. Phân cấp ưu tiên hiển thị:
+     - **Ưu tiên cao nhất**: Người phụ trách (`assignedTo`) và Tiền tệ (`Kinah`) luôn hiển thị đầy đủ, nổi bật.
+     - **Các nút phụ**: Tự động ẩn chữ trên màn hình nhỏ, chỉ giữ lại icon ngắn gọn:
+       + Steam Account: Chỉ hiện icon 🎮 (ẩn tên tài khoản trên mobile/tablet: `hidden xl:inline`).
+       + Steam Code: Chỉ hiện icon 🎫 (ẩn chữ "Code": `hidden lg:inline`).
+       + Vé Shugo & Daily: Chỉ hiện icon + số `🐹 0/21`, `🏰 0/14` (ẩn nhãn chữ: `hidden md:inline`).
+       + Nút Thêm NV: Chỉ hiện icon `➕` (ẩn chữ "Thêm NV": `hidden sm:inline`).
+       + Email: Thêm `truncate max-w-[80px] xs:max-w-[120px] sm:max-w-[180px] md:max-w-none`.
+  3. Kết quả: Tất cả các nút tự co giãn vừa vặn 100% chiều rộng trên **ĐÚNG 1 HÀNG DUY NHẤT**, không bao giờ bị rớt dòng và không bắt người dùng phải cuộn ngang.
+- **Prevention Rule**: Responsive thanh điều khiển nhiều nút phải kết hợp: (1) Cấm `flex-wrap`, (2) Thu nhỏ nội dung nút phụ về icon bằng `hidden [breakpoint]:inline`, (3) Truncate text dài, để toàn bộ phần tử luôn vừa khít 1 hàng.
