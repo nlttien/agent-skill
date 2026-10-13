@@ -171,22 +171,15 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Fix Applied**: Tạo utility `copyToClipboard` kiểm tra `window.isSecureContext` trước khi gọi `navigator.clipboard`, và luôn có fallback qua `textarea` ẩn + `document.execCommand('copy')` để đảm bảo sao chép thành công 100% trên cả HTTP LAN lẫn HTTPS.
 - **Prevention Rule**: Không bao giờ gọi trực tiếp `navigator.clipboard.writeText` mà không có fallback `document.execCommand('copy')` trong các ứng dụng nội bộ chạy trên HTTP / IP LAN.
 
-### [W14] Responsive thanh công cụ đa nút: Co gọn icon tự động để vừa khít 1 hàng, không xuống dòng
-- **Target**: Vue3 / TailwindCSS (Group Header / Action Bar nhiều nút).
-- **Symptom**: Khi hiển thị thanh công cụ chứa nhiều badge/nút (email, người phụ trách, steam account, các vé, kinah, thêm nv), trên màn hình nhỏ hoặc khi zoom/chia đôi màn hình, các nút bị rớt xuống thành 3-4 dòng xếp chồng dọc nhau (như trong ảnh thực tế).
+### [W14] Lỗi đè chồng nút (Overlap) trong Flexbox: Cấm dùng shrink không kiểm soát trên flex item chứa ruột cố định
+- **Target**: Vue3 / TailwindCSS (Toolbar / Action Bar đa nút).
+- **Symptom**: Khi hiển thị thanh công cụ gồm 2 khối (Khối trái và Khối phải) dùng \`justify-between\`, các nút của Khối trái (\`🛡️ Người phụ trách\`, \`🎮 Steam\`) bị văng ra ngoài và **NẰM ĐÈ CHỒNG LÊN** các nút của Khối phải (\`🐹 Shugo\`, \`🏰 Daily\`), chữ nọ xọ chữ kia làm giao diện nát bét (như ảnh thực tế của người dùng).
 - **Root Cause**:
-  1. Dùng `flex-wrap` hoặc `flex-col md:flex-row`: khi chiều ngang thiếu, trình duyệt tự động bẻ các nút xuống dòng mới.
-  2. Không xử lý responsive thu gọn nội dung text của từng nút phụ, khiến toàn bộ thanh bị phình to bề ngang.
-  3. Lầm tưởng: Ép `min-w-max overflow-x-auto` bắt người dùng cuộn ngang KHÔNG PHẢI là responsive thực sự.
+  1. Đặt \`shrink\` (\`flex-shrink: 1\`) trên container Khối trái, trong khi Khối phải đặt \`shrink-0\`.
+  2. Khi không đủ chiều rộng, Flexbox ép hộp chứa của Khối trái co lại (ví dụ từ 250px xuống 60px). NHƯNG các phần tử con bên trong Khối trái lại có kích thước cố định (\`shrink-0\` hoặc không thể co).
+  3. Vì Khối trái không có \`overflow: hidden\`, ruột của nó bị văng ra khỏi hộp chứa và **phủ đè lên Khối phải** bên cạnh!
 - **Fix Applied**:
-  1. Loại bỏ `flex-wrap` và `flex-col`, dùng `w-full flex items-center justify-between gap-1 sm:gap-2.5`.
-  2. Phân cấp ưu tiên hiển thị:
-     - **Ưu tiên cao nhất**: Người phụ trách (`assignedTo`) và Tiền tệ (`Kinah`) luôn hiển thị đầy đủ, nổi bật.
-     - **Các nút phụ**: Tự động ẩn chữ trên màn hình nhỏ, chỉ giữ lại icon ngắn gọn:
-       + Steam Account: Chỉ hiện icon 🎮 (ẩn tên tài khoản trên mobile/tablet: `hidden xl:inline`).
-       + Steam Code: Chỉ hiện icon 🎫 (ẩn chữ "Code": `hidden lg:inline`).
-       + Vé Shugo & Daily: Chỉ hiện icon + số `🐹 0/21`, `🏰 0/14` (ẩn nhãn chữ: `hidden md:inline`).
-       + Nút Thêm NV: Chỉ hiện icon `➕` (ẩn chữ "Thêm NV": `hidden sm:inline`).
-       + Email: Thêm `truncate max-w-[80px] xs:max-w-[120px] sm:max-w-[180px] md:max-w-none`.
-  3. Kết quả: Tất cả các nút tự co giãn vừa vặn 100% chiều rộng trên **ĐÚNG 1 HÀNG DUY NHẤT**, không bao giờ bị rớt dòng và không bắt người dùng phải cuộn ngang.
-- **Prevention Rule**: Responsive thanh điều khiển nhiều nút phải kết hợp: (1) Cấm `flex-wrap`, (2) Thu nhỏ nội dung nút phụ về icon bằng `hidden [breakpoint]:inline`, (3) Truncate text dài, để toàn bộ phần tử luôn vừa khít 1 hàng.
+  1. Loại bỏ hoàn toàn class \`shrink\` trên container Khối trái — đặt cả Khối trái và Khối phải là **\`shrink-0\`** trong container **\`min-w-max\`** có **\`overflow-x-auto scrollbar-hide\`**.
+  2. Khi cả 2 khối đều là \`shrink-0\`, trình duyệt buộc phải xếp chúng cạnh nhau theo thứ tự vật lý, **TUYỆT ĐỐI KHÔNG BAO GIỜ BỊ ĐÈ CHỒNG LÊN NHAU**.
+  3. Cắt gọt text thừa của các nút phụ (chữ "Shugo:", "Daily:", "Kinah" không cần thiết) để thanh công cụ luôn siêu gọn gàng (~650px), vừa khít màn hình trên đúng 1 hàng duy nhất mà không bị xuống dòng.
+- **Prevention Rule**: Tuyệt đối không dùng \`flex-shrink: 1\` (\`shrink\`) trên flex item nếu các phần tử con của nó không thể co lại tương ứng (vì sẽ gây lỗi tràn đè chồng lên flex item kế bên). Luôn dùng \`shrink-0\` kết hợp \`min-w-max\` và \`overflow-x-auto\`.
