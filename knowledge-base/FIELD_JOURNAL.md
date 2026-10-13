@@ -275,9 +275,9 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 ### [W21] "Sửa rồi mà vẫn vậy": file trên đĩa đã đổi nhưng tiến trình chưa nạp lại
 - **Target**: dịch vụ `gotcodeoutlook` (systemd, uvicorn `reload=False`) và gunicorn của bench trên .113.
 - **Symptom**: Đã áp patch + commit trên server; user thử lại vẫn lỗi y cũ và kết luận "bản sửa chưa đúng". FE mới đã lên nhưng backend vẫn trả dữ liệu kiểu cũ.
-- **Root Cause**: Tiến trình chỉ nạp code lúc khởi động. `systemctl restart` / `supervisorctl restart` cần sudo có mật khẩu → agent không tự chạy được; lần deploy dừng ở bước này mà không ai restart.
+- **Root Cause**: Tiến trình chỉ nạp code lúc khởi động. `bench restart` / `supervisorctl restart` / `systemctl restart` đòi sudo có mật khẩu, và agent kết luận SAI là "phải nhờ user restart". Với backend điều đó không đúng: các phiên trước vẫn nạp lại bằng tín hiệu reload (HUP) gửi cho tiến trình gunicorn master, không cần sudo — bằng chứng nằm ngay trong `logs/web.error.log` (`Handling signal: hup`).
 - **Fix Applied**: So `systemctl show <unit> -p ExecMainStartTimestamp` (hoặc `ps -o lstart= -p <pid>`) với mtime của file vừa sửa để biết tiến trình đang chạy bản nào, rồi đưa user đúng một lệnh restart.
-- **Prevention Rule**: "Deploy xong" = tiến trình đã khởi động SAU thời điểm file đổi, không phải "đã commit". Mỗi lần deploy phải kiểm tra và báo bằng chứng đó; restart cần quyền mà agent không có thì nói ngay và coi như CHƯA deploy. Giữ thứ tự backend restart → rồi mới build FE, nếu không UI sẽ gọi field mà backend đang chạy chưa biết.
+- **Prevention Rule**: "Deploy xong" = tiến trình đã khởi động SAU thời điểm file đổi, không phải "đã commit". Mỗi lần deploy phải kiểm tra và báo bằng chứng đó. Gặp "cần sudo" thì trước khi đẩy việc cho user phải xem log của dịch vụ và lịch sử phiên agent trước để biết các lần trước nạp lại bằng cách nào; chỉ khi thật sự không có cách thì nói ngay và coi như CHƯA deploy. Giữ thứ tự backend restart → rồi mới build FE, nếu không UI sẽ gọi field mà backend đang chạy chưa biết.
 
 
 ### [W22] Giá trị mặc định sai nhưng "truthy" làm fallback `or` không bao giờ chạy (vé tối đa hiện 3 thay vì 21/14)
