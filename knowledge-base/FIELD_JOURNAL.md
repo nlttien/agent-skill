@@ -278,3 +278,14 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Root Cause**: Tiến trình chỉ nạp code lúc khởi động. `systemctl restart` / `supervisorctl restart` cần sudo có mật khẩu → agent không tự chạy được; lần deploy dừng ở bước này mà không ai restart.
 - **Fix Applied**: So `systemctl show <unit> -p ExecMainStartTimestamp` (hoặc `ps -o lstart= -p <pid>`) với mtime của file vừa sửa để biết tiến trình đang chạy bản nào, rồi đưa user đúng một lệnh restart.
 - **Prevention Rule**: "Deploy xong" = tiến trình đã khởi động SAU thời điểm file đổi, không phải "đã commit". Mỗi lần deploy phải kiểm tra và báo bằng chứng đó; restart cần quyền mà agent không có thì nói ngay và coi như CHƯA deploy. Giữ thứ tự backend restart → rồi mới build FE, nếu không UI sẽ gọi field mà backend đang chạy chưa biết.
+
+
+### [W22] Giá trị mặc định sai nhưng "truthy" làm fallback `or` không bao giờ chạy (vé tối đa hiện 3 thay vì 21/14)
+- **Target**: Frappe DocType `Aion 2 Character` (field `max_ticket_*`) + Vue3 (thẻ nhóm Aion 2).
+- **Symptom**: Nhóm có nhân vật mới tạo hiển thị vé Shugo `0/3`, Daily `0/3` (đúng phải là `/21`, `/14`); ô nhập vé chỉ cho tối đa 3. Nhóm toàn nhân vật cũ vẫn đúng.
+- **Root Cause**:
+  1. Khi thêm 3 field "vé tối đa" vào DocType, `default` bị đặt `"3"` cho cả ba. Dữ liệu cũ được backfill đúng 21/14/14 nên lúc đó không ai thấy lỗi; chỉ bản ghi tạo SAU mới nhận 3.
+  2. Mọi nơi đọc đều viết `doc.max_ticket_shugo or 21` / `char.maxTicketShugo || 21`. Vì 3 là truthy nên fallback không bao giờ chạy — fallback chỉ cứu được `0`/`NULL`, không cứu được giá trị sai.
+  3. FE gộp vé chung của nhóm theo nhân vật có mốc thời gian mới nhất; khi cả nhóm chưa có mốc nào thì nhân vật cuối cùng ghi đè → một nhân vật sai làm cả nhóm hiện sai.
+- **Fix Applied**: Sửa `default` trong JSON thành 14/21/14, `bench reload-doc gege_custom doctype aion_2_character` (chỉ nạp lại đúng doctype này, không chạy cả `bench migrate`), sửa các bản ghi đang 3/3/3 qua chính hàm `update_aion2_field` của app (từng bản ghi, có validate) thay vì UPDATE hàng loạt. Kiểm tra bằng `bench execute frappe.new_doc --kwargs '{"doctype": "...", "as_dict": True}'` (kwargs là cú pháp Python: `True`, không phải `true`).
+- **Prevention Rule**: (1) Thêm field có `default` vào DocType đang có dữ liệu: sau khi deploy phải dựng thử một bản ghi MỚI (`frappe.new_doc`) và so với bản ghi cũ — backfill đúng không chứng minh default đúng. (2) Hằng số nghiệp vụ nên có một nguồn duy nhất; `x or DEFAULT` không phải lớp bảo vệ cho giá trị sai. (3) Truy lỗi "số hiển thị lạ": `GROUP BY` giá trị đó kèm `MIN/MAX(creation)` để thấy mốc thời gian bắt đầu sai, rồi đối chiếu `git log -S` của field.
