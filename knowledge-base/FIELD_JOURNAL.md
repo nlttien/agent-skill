@@ -225,3 +225,19 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
   2. Tích hợp `_is_aion2_admin(current_user)` vào `_can_manage_aion2_options`.
   3. Đổi nhãn nút header thành `⚙️ Máy Chủ & Class`, thêm helper `openOptionsModal(tab)` để khi click "⚙️ Quản lý" bên cạnh ô chọn Class sẽ mở thẳng vào tab Hệ Phái.
 - **Prevention Rule**: Luôn rà soát vị trí decorator `@frappe.whitelist()` khi tạo hoặc sửa các hàm RPC Frappe. Đảm bảo hàm kiểm tra quyền nội bộ không bị gán nhầm decorator thay cho hàm API public.
+
+
+### [W18] Quản lý danh sách phân công động (Assignee Management) kết hợp gỡ phân công tức thì (Unassign Action)
+- **Target**: Vue3 / TailwindCSS & Frappe Framework (RBAC & Business Process).
+- **Symptom**: Trước đây danh sách người phân công (`userOptions`) phụ thuộc vào query role cứng (`Booster`/`aion`) từ CSDL. Admin không thể thêm tài khoản khác vào danh sách phân công nếu chưa gán role Desk Frappe, và cũng không thể xoá/loại bỏ tài khoản khỏi danh sách phân công. Đồng thời trên từng hàng tài khoản, khi đã phân công người phụ trách, không có nút trực quan để gỡ bỏ phân công ngay lập tức.
+- **Root Cause**:
+  1. Thiếu bảng/bản ghi lưu danh sách phân công được phê duyệt động bởi Admin.
+  2. Trường `permission_type` trong DocType `Aion 2 Overview Grant` bị cấu hình là `Select`, khi thêm giá trị `assignee` bị lỗi validation `validate_selects()` chặn lại.
+  3. Giao diện dropdown phân công ẩn (`opacity-0`) không có nút thao tác gỡ bỏ phân công trực tiếp (`✕`).
+- **Fix Applied**:
+  1. Chuyển `permission_type` sang `fieldtype: "Data"` trong schema DocType và `tabDocField` (tuân thủ bài học [W15]).
+  2. Bổ sung các API backend `get_aion2_assignees()`, `add_aion2_assignee(user_email)`, `remove_aion2_assignee(user_email, clear_characters)`. Tự động seed danh sách ban đầu từ nhóm Booster để bảo toàn dữ liệu đang vận hành.
+  3. UI FE:
+     - Nút Header `👥 Người Phân Công` mở Modal quản lý: xem danh sách người được phân công (tên, email, số nhóm đang phụ trách), form thêm user từ toàn bộ tài khoản hệ thống, và nút `🗑 Xóa` khỏi danh sách.
+     - Trên từng nhóm nhân vật: thêm nút **`✕`** xóa nhanh người phân công (trở về "Chưa phân công") cho Admin; dropdown phân công có thêm option `⚙️ + Quản lý danh sách người phân công...`.
+- **Prevention Rule**: Với mọi quan hệ phân công nghiệp vụ (assignment), luôn cung cấp đủ 2 tầng điều khiển: (1) Quản lý Danh mục (Pool: Thêm/Xóa người trong danh sách) và (2) Thao tác trên từng bản ghi (Action: Gán người / Nút `✕` gỡ phân công tức thì).
