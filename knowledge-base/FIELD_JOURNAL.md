@@ -289,3 +289,16 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
   3. FE gộp vé chung của nhóm theo nhân vật có mốc thời gian mới nhất; khi cả nhóm chưa có mốc nào thì nhân vật cuối cùng ghi đè → một nhân vật sai làm cả nhóm hiện sai.
 - **Fix Applied**: Sửa `default` trong JSON thành 14/21/14, `bench reload-doc gege_custom doctype aion_2_character` (chỉ nạp lại đúng doctype này, không chạy cả `bench migrate`), sửa các bản ghi đang 3/3/3 qua chính hàm `update_aion2_field` của app (từng bản ghi, có validate) thay vì UPDATE hàng loạt. Kiểm tra bằng `bench execute frappe.new_doc --kwargs '{"doctype": "...", "as_dict": True}'` (kwargs là cú pháp Python: `True`, không phải `true`).
 - **Prevention Rule**: (1) Thêm field có `default` vào DocType đang có dữ liệu: sau khi deploy phải dựng thử một bản ghi MỚI (`frappe.new_doc`) và so với bản ghi cũ — backfill đúng không chứng minh default đúng. (2) Hằng số nghiệp vụ nên có một nguồn duy nhất; `x or DEFAULT` không phải lớp bảo vệ cho giá trị sai. (3) Truy lỗi "số hiển thị lạ": `GROUP BY` giá trị đó kèm `MIN/MAX(creation)` để thấy mốc thời gian bắt đầu sai, rồi đối chiếu `git log -S` của field.
+
+
+### [W23] Ảnh tĩnh cho SPA: tải về `public/img/...`, không trùng tên route, biểu tượng trắng cần nền tối
+- **Target**: Vue3 + Vite (`public/`), nginx `try_files`, component `Aion2ClassIcon`.
+- **Yêu cầu**: Hiện ảnh class trước tên nhân vật; ảnh bắt buộc nằm trong repo, không hot-link CDN của wiki.
+- **Bẫy đã tránh**:
+  1. Thư mục `public/aion2/` sẽ thành `dist/aion2/`. nginx `try_files $uri $uri/ /index.html` khớp THƯ MỤC trước khi rơi về `index.html`, nên tải lại trang `/aion2` (route SPA) sẽ hỏng. Đặt ảnh ở `public/img/<nhóm>/`.
+  2. Biểu tượng class màu trắng/bạc, nền trong suốt: gần như vô hình ở theme sáng → luôn đặt trên ô nền tối cố định, không dùng màu theo theme.
+  3. Tên class là dữ liệu người dùng tự thêm ("Spirit master", "Elementalist", "123"): map ảnh bằng khoá đã chuẩn hoá (lowercase, bỏ ký tự không phải chữ) + bảng alias; class lạ hiện ô chữ cái đầu, không để ảnh vỡ.
+  4. `prettier --check .` quét cả file cục bộ không commit (vd `.claude/settings.local.json`): CI xanh nhưng gate local đỏ → thêm vào `.prettierignore`.
+- **Cách làm**: tải ảnh gốc với tham số `format=original`, kiểm tra bằng `file` đúng là PNG, chuẩn hoá canvas vuông 128px rồi xuất WebP (~15 KB/ảnh). Unit test kiểm tra mọi class mặc định đều có file ảnh tồn tại trong `public/`.
+- **Verify**: Playwright + API giả, chụp cả theme sáng và tối; sau deploy `curl` từng ảnh (200 `image/webp`) và route `/aion2` (200 `text/html`).
+- **Prevention Rule**: Trước khi thêm thư mục vào `public/`, đối chiếu danh sách route của SPA. Ảnh/biểu tượng đơn sắc phải soát trên cả hai theme trước khi bàn giao.
