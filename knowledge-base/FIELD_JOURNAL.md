@@ -141,6 +141,7 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Prevention Rule**: (1) Đầu phiên làm việc, hỏi/chốt URL app user đang dùng (địa chỉ + port). (2) Sau khi fix, confirm build hash user đang tải (F12 Network) trùng bản mới. (3) Ghi danh sách deployments vào AGENTS.md của repo.
 
 ### [W10] Steam Guard code: pattern 5 ký tự phải bắt buộc có CHỮ SỐ
+> ⚠️ Rule "bắt buộc có chữ số" ở mục này SAI — xem [W20] (mã Steam có thể toàn chữ).
 - **Symptom**: Trích mã Steam Guard từ mail thật → trả về chữ "email" làm mã (false-positive; mail Steam có cụm "Steam Guard code" + từ 5 ký tự liền).
 - **Root Cause**: Regex `[A-Z0-9]{5}` + IGNORECASE match mọi từ 5 chữ cái; mail Steam nhiều từ tiếng Anh 5 ký tự ("email", "click"...).
 - **Fix Applied**: Lọc match phải `any(ch.isdigit())` (mã Steam Guard luôn chứa số) cho cả nhánh label lẫn standalone-line. Verify mail thật: hết false-positive; khi không có mail Steam mới → báo "không tìm thấy" + show nội dung mail gần nhất.
@@ -254,3 +255,15 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
   4. Ghi comment ngay tại ô hiển thị: "field `cp` ở BE là Item Power".
 - **Verify không cần backend**: `vite preview`/dev proxy `/assets` + `/api` về Frappe nên không dùng được khi không có BE. Dùng Playwright `page.route('**/*')`: request `/api/**` trả JSON giả, mọi request còn lại đọc file từ thư mục build (fallback `index.html`), `chromium.launch({ channel: 'chrome' })` để khỏi tải browser. Assert được cả payload ghi (`field: combat_power`) mà không chạm dữ liệu thật.
 - **Prevention Rule**: Đổi nghĩa/nhãn một chỉ số đang có dữ liệu → KHÔNG rename field, KHÔNG tái sử dụng key JSON cũ cho nghĩa mới; thêm field/key mới cho khái niệm mới và để lại comment ánh xạ nhãn ↔ field.
+
+
+### [W20] Steam Guard: gần như không lần nào lấy được mã — ràng buộc regex sai giả định về mail thật
+- **Target**: `gotcodeoutlook/api_server.py` (`extract_otp_code`, nhánh Steam).
+- **Symptom**: Nút lấy code Steam luôn báo "chưa thấy mã"; log `FETCH_OTP` ghi "Không tìm thấy mã" dù tiêu đề đúng là mail Steam ("Your Steam account: Access from new computer").
+- **Root Cause** (tái hiện offline bằng mẫu mail, CHƯA đối chiếu được với body mail thật):
+  1. Mã chỉ được nhận khi "đứng một mình trên 1 dòng" sau khi thay thẻ HTML bằng dấu cách → HTML dồn 1 dòng (Exchange/Graph hay trả vậy) hoặc có `&nbsp;` cạnh mã là trượt.
+  2. Ép mã phải có cả chữ lẫn số ([W10]). Mã Steam Guard lấy từ bảng `23456789BCDFGHJKMNPQRTVWXY` nên khoảng 16% mã là toàn chữ → trượt.
+  3. Nhánh nhãn dùng `\D{0,60}` giữa "Steam Guard code" và mã → tên account có chữ số nằm giữa là trượt.
+- **Fix Applied**: Tách hàm `extract_steam_codes`: thay MỖI thẻ HTML bằng xuống dòng (mỗi text node thành 1 dòng, không phụ thuộc HTML có xuống dòng hay không) + `html.unescape`; khớp mã bằng đúng bảng chữ của Steam, phân biệt hoa/thường, bỏ điều kiện "phải có số". Bảng chữ không nguyên âm tự loại "email", "STEAM", "CLICK"... nên không cần mẹo chống false-positive kiểu [W10]. Thêm 9 ca Steam vào `tests_manual/test_extract_otp_code.py`.
+- **Prevention Rule**: Trích mã OTP theo ĐÚNG bảng ký tự + độ dài của nhà phát hành, không theo `[A-Z0-9]{n}` rồi vá bằng điều kiện phụ. Tách text node theo thẻ, đừng tin xuống dòng của HTML. Mỗi lần sửa regex phải có ca test "HTML 1 dòng" và "có entity cạnh mã". Không có body mail thật trong DB để debug → nên lưu được body (đã che) của lần trích thất bại gần nhất.
+
