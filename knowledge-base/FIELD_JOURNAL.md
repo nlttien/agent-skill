@@ -198,3 +198,16 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
   3. Xoá cache metadata Frappe bằng `frappe.clear_cache()`.
   4. Bổ sung `Spirit master` / `Spiritmaster` vào `defaultClassList` và `classBadge` ở FE để có màu sắc và hiển thị đồng bộ.
 - **Prevention Rule**: Với bất kỳ trường nào trong Frappe cho phép người dùng tuỳ biến danh sách ở runtime (custom categories, options do admin thêm bớt), KHÔNG BAO GIỜ đặt `fieldtype: "Select"` trong DocType schema (vì sẽ bị `validate_selects()` chặn cứng). Luôn dùng `fieldtype: "Data"` hoặc `fieldtype: "Link"` trỏ tới DocType danh mục tương ứng.
+
+
+### [W16] Phân quyền động phân tầng (Hierarchical Dynamic RBAC) không phụ thuộc cứng vào System Role Frappe
+- **Target**: Frappe Framework (RBAC logic & DocType Grant) / Vue3 Integration.
+- **Symptom**: Trước đây, các tính năng quản trị cao cấp (cấu hình Server, Hệ phái, quản lý phân quyền) bị hardcode cứng theo một số ít role Frappe cố định (`Administrator`, `System Manager`, `adminaion2`, `Booster Manager`, `Leader Booster`). Khi muốn uỷ quyền quản trị cho một nhân sự phụ trách hoặc role bất kỳ thì không thể tự làm trên UI mà phải can thiệp cấp quyền Desk cấp cao của Frappe (nguy cơ mất an toàn dữ liệu toàn hệ thống ERP).
+- **Root Cause**: Bảng phân quyền `tabAion 2 Overview Grant` ban đầu chỉ thiết kế phẳng (chỉ kiểm tra có tên trong bảng hay không) cho duy nhất mục đích xem tab Tổng Quan, không có trường phân cấp mức độ thẩm quyền (`permission_type`).
+- **Fix Applied**:
+  1. Thêm trường `permission_type` (`overview` | `admin`, mặc định `overview`) vào `tabAion 2 Overview Grant` cả ở schema JSON và CSDL.
+  2. Hàm kiểm tra quyền admin `_is_aion2_admin(user)` kiểm tra song song: role hệ thống mặc định HOẶC tồn tại bản ghi trong `tabAion 2 Overview Grant` có `permission_type = 'admin'` khớp theo `user` hoặc `role IN %s`.
+  3. Hàm kiểm tra quyền xem tổng quan `_can_view_aion2_overview(user)`: nếu là admin (kể cả admin động) thì tự động có quyền, hoặc có bản ghi grant `permission_type IN ('overview', 'admin')`.
+  4. Trả về danh sách toàn bộ user hệ thống (`all_users`) độc lập với danh sách booster player (`userOptions`) để admin có thể gán quyền cho bất kỳ ai.
+  5. UI Vue3: Modal phân quyền động với 2 mức quyền `👑 Quản Trị Viên (Admin)` vs `📊 Xem Tổng Quan`, cho phép cấp quyền theo User hoặc Role hệ thống, hiển thị badge phân biệt rõ ràng và nút thu hồi tức thì.
+- **Prevention Rule**: Khi thiết kế module nghiệp vụ đặc thù, luôn xây dựng cơ chế Grant linh động có cột `permission_type` thay vì hardcode role tĩnh trong code. Tách biệt danh sách "tất cả user hệ thống" (dùng cho bảo mật/phân quyền) với danh sách "user nghiệp vụ đã lọc" (dùng cho phân công ca/task) để không làm thiếu tuỳ chọn người dùng.
