@@ -211,3 +211,17 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
   4. Trả về danh sách toàn bộ user hệ thống (`all_users`) độc lập với danh sách booster player (`userOptions`) để admin có thể gán quyền cho bất kỳ ai.
   5. UI Vue3: Modal phân quyền động với 2 mức quyền `👑 Quản Trị Viên (Admin)` vs `📊 Xem Tổng Quan`, cho phép cấp quyền theo User hoặc Role hệ thống, hiển thị badge phân biệt rõ ràng và nút thu hồi tức thì.
 - **Prevention Rule**: Khi thiết kế module nghiệp vụ đặc thù, luôn xây dựng cơ chế Grant linh động có cột `permission_type` thay vì hardcode role tĩnh trong code. Tách biệt danh sách "tất cả user hệ thống" (dùng cho bảo mật/phân quyền) với danh sách "user nghiệp vụ đã lọc" (dùng cho phân công ca/task) để không làm thiếu tuỳ chọn người dùng.
+
+
+### [W17] Thiếu decorator @frappe.whitelist() trên API lưu danh mục động (save_aion2_option)
+- **Target**: Frappe Framework (API Whitelist & RPC) / Vue3 Integration.
+- **Symptom**: Người dùng (kể cả Administrator hay Admin được phân quyền) không thể thêm class hoặc máy chủ mới từ giao diện web app, bị ném lỗi `Function save_aion2_option is not whitelisted`.
+- **Root Cause**:
+  1. Decorator `@frappe.whitelist()` bị đặt nhầm lên trên hàm helper kiểm tra quyền nội bộ `_can_manage_aion2_options()` thay vì đặt lên hàm RPC `save_aion2_option`.
+  2. Hàm `_can_manage_aion2_options()` chỉ kiểm tra role Frappe tĩnh, chưa tích hợp kiểm tra Admin động `_is_aion2_admin(current_user)`.
+  3. Nút mở modal ở header đặt tên là `⚙️ Quản Lý Server` và nút mở quản lý Class trong form nhân vật không chủ động chuyển sang tab `class`.
+- **Fix Applied**:
+  1. Đặt `@frappe.whitelist()` chính xác lên `save_aion2_option` và bổ sung `frappe.db.commit()`.
+  2. Tích hợp `_is_aion2_admin(current_user)` vào `_can_manage_aion2_options`.
+  3. Đổi nhãn nút header thành `⚙️ Máy Chủ & Class`, thêm helper `openOptionsModal(tab)` để khi click "⚙️ Quản lý" bên cạnh ô chọn Class sẽ mở thẳng vào tab Hệ Phái.
+- **Prevention Rule**: Luôn rà soát vị trí decorator `@frappe.whitelist()` khi tạo hoặc sửa các hàm RPC Frappe. Đảm bảo hàm kiểm tra quyền nội bộ không bị gán nhầm decorator thay cho hàm API public.
