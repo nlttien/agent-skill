@@ -170,3 +170,15 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Root Cause**: `navigator.clipboard.writeText` theo tiêu chuẩn W3C chỉ được phép hoạt động trong Secure Context (HTTPS hoặc localhost). Khi web app chạy trên HTTP thuần qua IP LAN nội bộ (`http://192.168.x.x`), trình duyệt (Chrome, Edge, Firefox) chặn `navigator.clipboard` (bị undefined hoặc ném `NotAllowedError` / `SecurityError`). Việc gọi trực tiếp `await navigator.clipboard.writeText()` mà không có fallback khiến luồng nhảy vào `catch` và báo "Copy thất bại".
 - **Fix Applied**: Tạo utility `copyToClipboard` kiểm tra `window.isSecureContext` trước khi gọi `navigator.clipboard`, và luôn có fallback qua `textarea` ẩn + `document.execCommand('copy')` để đảm bảo sao chép thành công 100% trên cả HTTP LAN lẫn HTTPS.
 - **Prevention Rule**: Không bao giờ gọi trực tiếp `navigator.clipboard.writeText` mà không có fallback `document.execCommand('copy')` trong các ứng dụng nội bộ chạy trên HTTP / IP LAN.
+
+### [W14] Responsive thanh công cụ: Tránh flex-wrap gây rớt nhiều hàng dọc, dùng min-w-max + overflow-x-auto
+- **Target**: Vue3 / TailwindCSS (Group Header / Action Bar đa nút).
+- **Symptom**: Khi hiển thị thanh công cụ chứa nhiều badge/nút chức năng (tiêu đề nhóm, người phụ trách, tài khoản game, vé, tiền tệ, nút hành động), trên màn hình hẹp hoặc khi zoom/chia đôi cửa sổ, các nút bị ngắt dòng rơi xuống thành 3-4 hàng xếp chồng dọc nhau, gây vỡ giao diện và chiếm nhiều diện tích dọc.
+- **Root Cause**:
+  1. Sử dụng \`flex-wrap\` và \`flex-col md:flex-row\` trên thanh điều khiển ngang khiến các phần tử tự động bẻ xuống dòng khi chiều ngang container không đủ.
+  2. Các phần tử con không được khoá \`shrink-0\` / \`flex-nowrap\`, khiến chúng bị co lại hoặc rớt hàng không đồng đều.
+- **Fix Applied**:
+  1. Loại bỏ hoàn toàn \`flex-wrap\` và \`flex-col\`, thay bằng \`flex items-center justify-between min-w-max flex-nowrap\`.
+  2. Bọc container bên ngoài bằng \`overflow-x-auto scrollbar-hide\` và gắn \`shrink-0 flex-nowrap\` cho các nhóm nút con.
+  3. Kết quả: Toàn bộ thanh công cụ được khoá cố định trên **ĐÚNG 1 HÀNG NGANG DUY NHẤT**; trên màn hình nhỏ người dùng có thể lướt/cuộn ngang mượt mà mà không bao giờ bị vỡ hàng dọc.
+- **Prevention Rule**: Với các thanh công cụ / action bar có nhiều nút tương tác yêu cầu giữ nguyên trên 1 hàng, TUYỆT ĐỐI không dùng \`flex-wrap\`. Luôn dùng \`min-w-max flex-nowrap\` kết hợp \`overflow-x-auto scrollbar-hide\`.
