@@ -257,13 +257,24 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Prevention Rule**: Đổi nghĩa/nhãn một chỉ số đang có dữ liệu → KHÔNG rename field, KHÔNG tái sử dụng key JSON cũ cho nghĩa mới; thêm field/key mới cho khái niệm mới và để lại comment ánh xạ nhãn ↔ field.
 
 
-### [W20] Steam Guard: gần như không lần nào lấy được mã — ràng buộc regex sai giả định về mail thật
+### [W20] Steam Guard: gần như không lần nào lấy được mã — phần tách text không khớp với mail thật
 - **Target**: `gotcodeoutlook/api_server.py` (`extract_otp_code`, nhánh Steam).
-- **Symptom**: Nút lấy code Steam luôn báo "chưa thấy mã"; log `FETCH_OTP` ghi "Không tìm thấy mã" dù tiêu đề đúng là mail Steam ("Your Steam account: Access from new computer").
-- **Root Cause** (tái hiện offline bằng mẫu mail, CHƯA đối chiếu được với body mail thật):
-  1. Mã chỉ được nhận khi "đứng một mình trên 1 dòng" sau khi thay thẻ HTML bằng dấu cách → HTML dồn 1 dòng (Exchange/Graph hay trả vậy) hoặc có `&nbsp;` cạnh mã là trượt.
-  2. Ép mã phải có cả chữ lẫn số ([W10]). Mã Steam Guard lấy từ bảng `23456789BCDFGHJKMNPQRTVWXY` nên khoảng 16% mã là toàn chữ → trượt.
-  3. Nhánh nhãn dùng `\D{0,60}` giữa "Steam Guard code" và mã → tên account có chữ số nằm giữa là trượt.
-- **Fix Applied**: Tách hàm `extract_steam_codes`: thay MỖI thẻ HTML bằng xuống dòng (mỗi text node thành 1 dòng, không phụ thuộc HTML có xuống dòng hay không) + `html.unescape`; khớp mã bằng đúng bảng chữ của Steam, phân biệt hoa/thường, bỏ điều kiện "phải có số". Bảng chữ không nguyên âm tự loại "email", "STEAM", "CLICK"... nên không cần mẹo chống false-positive kiểu [W10]. Thêm 9 ca Steam vào `tests_manual/test_extract_otp_code.py`.
-- **Prevention Rule**: Trích mã OTP theo ĐÚNG bảng ký tự + độ dài của nhà phát hành, không theo `[A-Z0-9]{n}` rồi vá bằng điều kiện phụ. Tách text node theo thẻ, đừng tin xuống dòng của HTML. Mỗi lần sửa regex phải có ca test "HTML 1 dòng" và "có entity cạnh mã". Không có body mail thật trong DB để debug → nên lưu được body (đã che) của lần trích thất bại gần nhất.
+- **Symptom**: Nút lấy code Steam luôn báo "chưa thấy mã" (45/46 lần trong log `FETCH_OTP`) dù mail mới nhất đúng là "Your Steam account: Access from new computer"; modal hiện nguyên HTML của mail, nhìn bằng mắt vẫn thấy mã.
+- **Mail thật trông thế nào** (đối chiếu với một mẫu `.eml` công khai cùng tiêu đề, tìm bằng GitHub code search theo class của template):
+  - HTML: mã nằm một mình trong `<td class="title-48 c-blue1 fw-b a-center" ...>`, bao quanh là tab/xuống dòng. HTML KHÔNG có nhãn "Login Code" — ngay trước mã là tên quốc gia.
+  - text/plain: hai dòng `Login Code` / `<mã>`. Template cũ: `...login to account NAME:`, dòng trống, rồi mã.
+- **Root Cause**:
+  1. Bản cũ thay thẻ HTML bằng dấu cách rồi đòi mã "đứng một mình trên 1 dòng" → chạy được với HTML gốc (MIME) nhưng trượt khi HTML bị dồn dòng (kiểu Exchange/Graph trả về) hoặc có `&nbsp;` cạnh mã.
+  2. Ép mã phải có cả chữ lẫn số ([W10]) → mã toàn chữ trượt (bảng chữ Steam `23456789BCDFGHJKMNPQRTVWXY`, khoảng 16% mã là toàn chữ).
+  3. Nhánh nhãn `steam guard code\D{0,60}?\b([A-Z0-9]{5})\b` + IGNORECASE bắt nhầm từ 5 chữ cái đầu tiên ("login", "email"), bị lọc bỏ, và không bao giờ tới được mã.
+- **Fix Applied**: hàm `extract_steam_codes` gồm 3 lớp: (1) ô `title-48` của template (không phụ thuộc bảng chữ, chịu được tiền tố `x_` ở class); (2) mã đứng ngay sau nhãn `Login Code` / `...login to account NAME:` (text/plain, body_preview); (3) thay MỖI thẻ bằng xuống dòng + `html.unescape` rồi lấy dòng chỉ gồm 5 ký tự thuộc bảng chữ Steam, phân biệt hoa/thường. 24 ca test, có fixture trích từ mail thật.
+- **Còn chưa kiểm chứng**: chưa chạy trên body do Graph trả về từ hòm thư thật (agent không được đọc mail production) — dạng "Exchange dồn dòng" trong test là giả lập.
+- **Prevention Rule**: (1) Trước khi viết regex trích mã PHẢI có một mẫu mail thật; không đọc được hòm thư thì tìm mẫu công khai (code search theo class hoặc câu đặc trưng của template) hoặc xin user dán nội dung. (2) Bám cấu trúc template (ô chứa mã) trước, bảng ký tự của nhà phát hành sau; không dùng `[A-Z0-9]{n}` + IGNORECASE. (3) Tách text node theo thẻ, đừng tin xuống dòng của HTML; luôn có ca test "HTML 1 dòng" và "entity cạnh mã".
 
+
+### [W21] "Sửa rồi mà vẫn vậy": file trên đĩa đã đổi nhưng tiến trình chưa nạp lại
+- **Target**: dịch vụ `gotcodeoutlook` (systemd, uvicorn `reload=False`) và gunicorn của bench trên .113.
+- **Symptom**: Đã áp patch + commit trên server; user thử lại vẫn lỗi y cũ và kết luận "bản sửa chưa đúng". FE mới đã lên nhưng backend vẫn trả dữ liệu kiểu cũ.
+- **Root Cause**: Tiến trình chỉ nạp code lúc khởi động. `systemctl restart` / `supervisorctl restart` cần sudo có mật khẩu → agent không tự chạy được; lần deploy dừng ở bước này mà không ai restart.
+- **Fix Applied**: So `systemctl show <unit> -p ExecMainStartTimestamp` (hoặc `ps -o lstart= -p <pid>`) với mtime của file vừa sửa để biết tiến trình đang chạy bản nào, rồi đưa user đúng một lệnh restart.
+- **Prevention Rule**: "Deploy xong" = tiến trình đã khởi động SAU thời điểm file đổi, không phải "đã commit". Mỗi lần deploy phải kiểm tra và báo bằng chứng đó; restart cần quyền mà agent không có thì nói ngay và coi như CHƯA deploy. Giữ thứ tự backend restart → rồi mới build FE, nếu không UI sẽ gọi field mà backend đang chạy chưa biết.
