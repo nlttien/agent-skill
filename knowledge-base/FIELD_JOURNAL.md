@@ -241,3 +241,16 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
      - Nút Header `👥 Người Phân Công` mở Modal quản lý: xem danh sách người được phân công (tên, email, số nhóm đang phụ trách), form thêm user từ toàn bộ tài khoản hệ thống, và nút `🗑 Xóa` khỏi danh sách.
      - Trên từng nhóm nhân vật: thêm nút **`✕`** xóa nhanh người phân công (trở về "Chưa phân công") cho Admin; dropdown phân công có thêm option `⚙️ + Quản lý danh sách người phân công...`.
 - **Prevention Rule**: Với mọi quan hệ phân công nghiệp vụ (assignment), luôn cung cấp đủ 2 tầng điều khiển: (1) Quản lý Danh mục (Pool: Thêm/Xóa người trong danh sách) và (2) Thao tác trên từng bản ghi (Action: Gán người / Nút `✕` gỡ phân công tức thì).
+
+
+### [W19] Đổi nghĩa một chỉ số đang chạy (CP → IP) và thêm chỉ số mới: đổi NHÃN, không đổi tên field
+- **Target**: Vue3 (Aion2GroupCard / Aion2View) + Frappe DocType `Aion 2 Character`.
+- **Symptom**: Nghiệp vụ chốt lại: con số đang lưu ở field `cp` thực chất là Item Power (IP); cần thêm một ô Combat Power (CP) riêng. Chỉ 1 commit trước đó nhãn vừa bị đổi IP → CP, tức nhãn đã lật qua lại 2 lần.
+- **Root Cause**: Tên field kỹ thuật (`cp`) bị coi là tên nghiệp vụ. Khi nghĩa nghiệp vụ đổi, cám dỗ là rename field / đảo nghĩa key JSON (`cp` = CP mới) — cách này làm tab cũ chưa Ctrl+F5 hiển thị và GHI sai chỉ số vào dữ liệu thật.
+- **Fix Applied**:
+  1. Giữ nguyên field `cp` + key JSON `cp` (giờ hiển thị là IP), không chuyển dữ liệu. Chỉ đổi nhãn ở FE và `label` của DocField.
+  2. Chỉ số mới dùng field MỚI `combat_power` (Int) + key JSON mới `combatPower` + thêm vào whitelist `_QUICK_FIELDS`. Thay đổi BE thuần cộng thêm → bundle cũ vẫn chạy đúng.
+  3. FE đọc `char.combatPower || 0` nên không vỡ nếu FE lên trước BE; thứ tự deploy đúng vẫn là BE → FE.
+  4. Ghi comment ngay tại ô hiển thị: "field `cp` ở BE là Item Power".
+- **Verify không cần backend**: `vite preview`/dev proxy `/assets` + `/api` về Frappe nên không dùng được khi không có BE. Dùng Playwright `page.route('**/*')`: request `/api/**` trả JSON giả, mọi request còn lại đọc file từ thư mục build (fallback `index.html`), `chromium.launch({ channel: 'chrome' })` để khỏi tải browser. Assert được cả payload ghi (`field: combat_power`) mà không chạm dữ liệu thật.
+- **Prevention Rule**: Đổi nghĩa/nhãn một chỉ số đang có dữ liệu → KHÔNG rename field, KHÔNG tái sử dụng key JSON cũ cho nghĩa mới; thêm field/key mới cho khái niệm mới và để lại comment ánh xạ nhãn ↔ field.
