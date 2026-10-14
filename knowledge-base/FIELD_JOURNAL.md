@@ -302,3 +302,16 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Cách làm**: tải ảnh gốc với tham số `format=original`, kiểm tra bằng `file` đúng là PNG, chuẩn hoá canvas vuông 128px rồi xuất WebP (~15 KB/ảnh). Unit test kiểm tra mọi class mặc định đều có file ảnh tồn tại trong `public/`.
 - **Verify**: Playwright + API giả, chụp cả theme sáng và tối; sau deploy `curl` từng ảnh (200 `image/webp`) và route `/aion2` (200 `text/html`).
 - **Prevention Rule**: Trước khi thêm thư mục vào `public/`, đối chiếu danh sách route của SPA. Ảnh/biểu tượng đơn sắc phải soát trên cả hai theme trước khi bàn giao.
+
+### [W24] Nới ràng buộc "1 acc = 1 máy chủ" thành "1 acc nhiều máy chủ": ràng buộc cũ nằm rải ở 5 chỗ, không chỉ ở form
+- **Target**: Vue3 (`Aion2View`, `Aion2CharFormModal`, `Aion2GroupCard`), Frappe `api/aion2.py`.
+- **Yêu cầu**: Mỗi acc Steam thêm được máy chủ thứ hai; tối đa 4 nhân vật / máy chủ, 8 nhân vật / acc.
+- **Ràng buộc ngầm phải gỡ** (model dữ liệu vốn đã cho phép, chỉ UI và các lệnh đồng bộ là giả định 1 máy chủ):
+  1. Form khoá ô máy chủ theo nhân vật đầu tiên của acc.
+  2. `watch(pickSteam)` tự điền máy chủ: chạy cả khi code mở form có điền sẵn → ghi đè giá trị điền sẵn. Đổi sang xử lý sự kiện `@update:pick-steam` (chỉ chạy khi NGƯỜI DÙNG đổi).
+  3. Lưu khi sửa 1 nhân vật thì "đồng bộ máy chủ" sang mọi nhân vật cùng acc → với nhiều máy chủ sẽ âm thầm gộp cả acc về 1 máy chủ.
+  4. Lệnh đồng bộ Kinah `WHERE steam_account = ...` áp cả acc → 2 thẻ máy chủ hiện cùng 1 số và bảng tổng cộng 2 lần. Thêm điều kiện máy chủ (tham số `server` có sẵn nhưng chưa từng được dùng).
+  5. Giá trị dùng chung cả acc (vé) lấy "bản ghi mới nhất trong thẻ" → thẻ máy chủ mới hiện 0. Phải lấy bản mới nhất trên mọi thẻ cùng acc.
+- **Cách làm**: gom việc đếm slot vào helper thuần (`accountUsage`, `slotLimitError`) có unit test, FE và backend dùng cùng hằng số; backend chỉ kiểm khi nhân vật thực sự đổi acc/máy chủ để không chặn việc sửa dữ liệu cũ. Số đếm trên thẻ lấy từ toàn bộ dữ liệu, không lấy từ danh sách đã lọc tìm kiếm.
+- **Verify**: trước khi nạp lại backend, gọi thẳng hàm kiểm slot bằng script chỉ-đọc trên dữ liệu thật (đủ 4 → chặn, máy chủ khác → cho phép); luồng ghi thử bằng Playwright + API giả có trạng thái.
+- **Prevention Rule**: Khi nới một ràng buộc số lượng (1→N), grep mọi câu `UPDATE ... WHERE <khoá nhóm>` và mọi chỗ "lấy phần tử đầu tiên của nhóm" — mỗi chỗ là một giả định cần quyết định lại phạm vi (theo acc hay theo máy chủ). `watch` dùng để tự điền form sẽ ghi đè giá trị do code điền sẵn; dùng sự kiện của người dùng.
