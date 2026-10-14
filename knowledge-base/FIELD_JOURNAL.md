@@ -112,9 +112,9 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Prevention Rule**: Khi port nhiều commit giữa repo: mang thẳng bản cuối, áp lại bằng tay các thay đổi có chủ đích của repo đích (như strip platform); `git add` xong kiểm tra `git status` không còn MM; template surgery thì dùng compiler-sfc parse để tìm lỗi vị trí thay vì đoán.
 
 ### [W6] Quy hoạch repo Acc Manager (10-2026)
-- Repo chính FE từ 2026-10-10: **GegeTeamCode/Account-manager** (đã đủ 4 tab: Booster Accounts / Outlook Mail / Aion 2 / Steam Accounts). Server .113 `/home/frappe/trader-ui` đã trỏ origin sang repo này, chạy branch `port/booster-session` (PR #1 chờ merge; sau merge đổi sang `main`).
+- Repo chính FE từ 2026-10-10: **GegeTeamCode/Account-manager** (đã đủ 4 tab: Booster Accounts / Outlook Mail / Aion 2 / Steam Accounts). Thư mục FE trên máy prod đã trỏ origin sang repo này, chạy branch `port/booster-session` (PR #1 chờ merge; sau merge đổi sang `main`).
 - Repo cũ `nlttien/Custom-UI-GeGe-Currency` = archive, không làm việc nữa.
-- BE vẫn repo `GegeTeamCode/frappe-erp15-gegecurrency` branch `feat/booster-account-mgmt`, sửa trực tiếp trên .113 rồi commit push; thay đổi doctype → `bench migrate` + `supervisorctl restart`.
+- BE vẫn repo `GegeTeamCode/frappe-erp15-gegecurrency` branch `feat/booster-account-mgmt`, sửa trực tiếp trên máy prod rồi commit push; thay đổi doctype → `bench migrate` + `supervisorctl restart`.
 - Người phụ trách Aion 2: field `assigned_to` (Link User) trên character; set 1 lần cập nhật toàn bộ character cùng email (như PC/Player/Gearup); FE badge 🛡️ tím trên header nhóm.
 - Component pattern của repo: `components/booster/` — modal dùng `v-model` + props dữ liệu + emit `changed`/`saved` về view refresh; logic mức dòng ở `composables/useBoosterRow.js`, mail ở `useBoosterMailSync.js`.
 - Chống mìn tương lai: mỗi lần refactor xong PHẢI browser-verify từng route; PR nhỏ theo chặng, gate `lint → build → prettier → format:check → test` trước mỗi push.
@@ -122,11 +122,11 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 ### [W7] Self-verify bằng browser thật trước khi bàn giao (quy trình chuẩn từ 2026-10-10)
 - **Vấn đề**: Gate (lint/build/test) không bắt lỗi runtime (TDZ [W1], API component sai [W2]) → người dùng thành người test đầu tiên.
 - **Quy trình đã chứng minh** (khoảng 5 phút, chạy được ngay):
-  1. **User test trên .113**: bench console (script flat) — `agent-test-user (tên/mật khẩu lưu trong .ai本地, không ghi repo công khai), roles `Game Currency Admin` + `Booster`; set password qua `u.new_password = ...; u.save()`. Verify bằng `curl POST /api/method/login`.
-  2. **SSH tunnel**: `ssh -N -L 8080:127.0.0.1:80 frappe@192.168.2.113` chạy background (không dùng `&` trong lệnh thường — bị chết theo shell) → app truy cập được tại `http://localhost:8080`.
+  1. **User test trên máy prod**: bench console (script flat) — `<user test> (tên/mật khẩu lưu trong .ai本地, không ghi repo công khai), roles `Game Currency Admin` + `Booster`; set password qua `u.new_password = ...; u.save()`. Verify bằng `curl POST /api/method/login`.
+  2. **SSH tunnel**: `ssh -N -L 8080:127.0.0.1:80 <user>@<máy prod>` chạy background (không dùng `&` trong lệnh thường — bị chết theo shell) → app truy cập được tại `http://localhost:8080`.
   3. **Browser skill (browser-use:control-browser)**: mở tab → login form (fill 2 textbox theo placeholder + nút "🚀 Bắt đầu") → `goto` từng route → `domSnapshot()` đo độ dài + marker từ khóa → thử thao tác thật (VD: select người phụ trách) → đối chiếu DB bằng bench console.
 - **Chuẩn đỗ route**: snapshot có nội dung thực (marker/domain data hiển thị), KHÔNG chỉ navbar. Lưu ý: snapshot ngắn chưa chắc lỗi — có thể chỉ là dữ liệu ít (Aion2 1 account test = 1.6K ký tự hợp lệ); đối chiếu marker + heading.
-- **Prevention Rule**: sau mỗi deploy FE lên .113, LUÔN chạy quy trình này qua các route vừa đụng trước khi báo user "xong".
+- **Prevention Rule**: sau mỗi deploy FE lên máy prod, LUÔN chạy quy trình này qua các route vừa đụng trước khi báo user "xong".
 
 ### [W8] frappe.rename_doc chậm ~2s trên DB ERPNext lớn — rename SQL trực tiếp khi không có Link field
 - **Symptom**: Đổi tên Steam Account qua API mất ~2–2.3s (user thấy "rất tốn thời gian"), dù đã tắt `rebuild_search` + bỏ double-save.
@@ -135,8 +135,8 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Prevention Rule**: (1) Trước khi dùng `frappe.rename_doc`, check `get_link_fields(doctype)` — nếu rỗng, SQL trực tiếp nhanh gấp ~20 lần. (2) Thiết kế doctype mới: cân nhắc autoname docname thay vì đặt docname theo tên người dùng nhập — đổi "tên hiển thị" không nên đồng nghĩa đổi khoá chính. (3) Khi điều tra chậm: profile từng bước trong bench console (`time.time()` quanh mỗi call) thay vì đo cả HTTP.
 
 ### [W9] Bẫy đa triển khai (multi-deployment): "fix rồi mà vẫn vậy" = user đang chạy app ở MÁY KHÁC
-- **Symptom**: Fix + browser-verify end-to-end trên .113 xong xuôi, user vẫn báo "vẫn vậy" 3 lần liên tiếp.
-- **Root Cause**: App chạy **nhiều nơi trong LAN**: .113 (dev tôi deploy) và **.228:80 prod + .228:5173 vite dev** (build khác, không có fix, dữ liệu thật nằm ở BE .228). User test trên .228 — mọi fix trên .113 vô nghĩa với họ.
+- **Symptom**: Fix + browser-verify end-to-end trên máy prod xong xuôi, user vẫn báo "vẫn vậy" 3 lần liên tiếp.
+- **Root Cause**: App chạy **nhiều nơi trong LAN**: máy prod (dev tôi deploy) và **máy ERP chính (bản build + vite dev)** (build khác, không có fix, dữ liệu thật nằm ở BE máy ERP chính). User test trên máy ERP chính — mọi fix trên máy prod vô nghĩa với họ.
 - **Detection**: khi user báo lỗi UI nhưng browser-verify của tôi pass — probe LAN (`curl -m 2` các IP:80/5173/8080 quen thuộc), so sánh build hash `assets/index-*.js` giữa các nơi.
 - **Prevention Rule**: (1) Đầu phiên làm việc, hỏi/chốt URL app user đang dùng (địa chỉ + port). (2) Sau khi fix, confirm build hash user đang tải (F12 Network) trùng bản mới. (3) Ghi danh sách deployments vào AGENTS.md của repo.
 
@@ -151,7 +151,7 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Symptom**: Debug edits vừa viết biến mất (working tree clean dù chưa commit); file rơi vào trạng thái lai (mảnh code mới + block cũ, mất định nghĩa hàm nhưng còn lời gọi) — build vẫn xanh vì mảnh lai tình cờ hợp lệ, runtime sai.
 - **Root Cause**: Một phiên agent khác chạy đồng thời trên cùng thư mục làm việc, rebase/checkout/ghi file đè lên edits của phiên này.
 - **Detection**: (1) `git status` clean dù vừa sửa → nghi ngay ghi đè. (2) Edit no-op: `str.replace` cũ KHÔNG assert count vẫn in OK — mọi python patch PHẢI `assert count == 1` trước/sau replace. (3) So marker trong file thật (grep/sed) thay vì tin rằng lần sửa trước đã ăn.
-- **Prevention Rule**: (1) Mọi patch bằng python phải assert số lần match. (2) Khi nghi song song: `git reflog` + `git log` so commit không phải của mình + chốt với user "một repo một phiên tại một thời điểm". (3) Deploy .113 phải luôn theo chu trình commit→push→fetch→reset→build — build trên cây bẩn là build ảo.
+- **Prevention Rule**: (1) Mọi patch bằng python phải assert số lần match. (2) Khi nghi song song: `git reflog` + `git log` so commit không phải của mình + chốt với user "một repo một phiên tại một thời điểm". (3) Deploy máy prod phải luôn theo chu trình commit→push→fetch→reset→build — build trên cây bẩn là build ảo.
 
 ### [W12] Lệch timezone naive datetime làm sai lệch logic chu kỳ hồi phục (+30 NL)
 - **Symptom**: Khi cập nhật Năng lượng trong Aion 2 (ví dụ nhập 0), sau khi lưu giá trị hiển thị tự động nhảy lên thành 30 (nhập 630 nhảy thành 660).
@@ -167,7 +167,7 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Prevention Rule**: (1) Tuyệt đối không gọi `.timestamp()` trên naive datetime trong Python khi server chạy khác múi giờ UTC. Luôn gán `tzinfo=timezone.utc` hoặc dùng timezone-aware. (2) `frappe.utils.get_datetime()` không parse được số epoch float/int — phải dùng `fromtimestamp` / `utcfromtimestamp`.
 
 ### [W13] Clipboard API trên Insecure Context (HTTP / IP LAN) bị chặn gây lỗi "Copy thất bại"
-- **Symptom**: Nút copy trên app chạy qua mạng LAN (http://192.168.2.113) bị báo "Copy thất bại" khi người dùng click vào icon sao chép (Steam login, mật khẩu, text...).
+- **Symptom**: Nút copy trên app chạy qua mạng LAN (http://<IP LAN>) bị báo "Copy thất bại" khi người dùng click vào icon sao chép (Steam login, mật khẩu, text...).
 - **Root Cause**: `navigator.clipboard.writeText` theo tiêu chuẩn W3C chỉ được phép hoạt động trong Secure Context (HTTPS hoặc localhost). Khi web app chạy trên HTTP thuần qua IP LAN nội bộ (`http://192.168.x.x`), trình duyệt (Chrome, Edge, Firefox) chặn `navigator.clipboard` (bị undefined hoặc ném `NotAllowedError` / `SecurityError`). Việc gọi trực tiếp `await navigator.clipboard.writeText()` mà không có fallback khiến luồng nhảy vào `catch` và báo "Copy thất bại".
 - **Fix Applied**: Tạo utility `copyToClipboard` kiểm tra `window.isSecureContext` trước khi gọi `navigator.clipboard`, và luôn có fallback qua `textarea` ẩn + `document.execCommand('copy')` để đảm bảo sao chép thành công 100% trên cả HTTP LAN lẫn HTTPS.
 - **Prevention Rule**: Không bao giờ gọi trực tiếp `navigator.clipboard.writeText` mà không có fallback `document.execCommand('copy')` trong các ứng dụng nội bộ chạy trên HTTP / IP LAN.
@@ -273,7 +273,7 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 
 
 ### [W21] "Sửa rồi mà vẫn vậy": file trên đĩa đã đổi nhưng tiến trình chưa nạp lại
-- **Target**: dịch vụ `gotcodeoutlook` (systemd, uvicorn `reload=False`) và gunicorn của bench trên .113.
+- **Target**: dịch vụ `gotcodeoutlook` (systemd, uvicorn `reload=False`) và gunicorn của bench trên máy prod.
 - **Symptom**: Đã áp patch + commit trên server; user thử lại vẫn lỗi y cũ và kết luận "bản sửa chưa đúng". FE mới đã lên nhưng backend vẫn trả dữ liệu kiểu cũ.
 - **Root Cause**: Tiến trình chỉ nạp code lúc khởi động. `bench restart` / `supervisorctl restart` / `systemctl restart` đòi sudo có mật khẩu, và agent kết luận SAI là "phải nhờ user restart". Với backend điều đó không đúng: các phiên trước vẫn nạp lại bằng tín hiệu reload (HUP) gửi cho tiến trình gunicorn master, không cần sudo — bằng chứng nằm ngay trong `logs/web.error.log` (`Handling signal: hup`).
 - **Fix Applied**: So `systemctl show <unit> -p ExecMainStartTimestamp` (hoặc `ps -o lstart= -p <pid>`) với mtime của file vừa sửa để biết tiến trình đang chạy bản nào. Backend: reload gunicorn master. `gotcodeoutlook`: unit đặt `Restart=always` nên user `frappe` chỉ cần dừng tiến trình chính, systemd tự bật lại sau `RestartSec`; trước đó chạy `venv/bin/python -c "import api_server"` để chắc bản mới nạp được, tránh vòng lặp crash.
