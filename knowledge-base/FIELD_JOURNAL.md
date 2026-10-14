@@ -347,3 +347,10 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Root Cause**: Tooltip chỉ là lớp render. Giá là dữ liệu tĩnh: item → bảng giá (stride 0x34, +0x14) → nhóm giá `GemStartingLevel8to15` → [khoá currency] + [số lượng]. Khoá ngoại không trỏ thẳng tới currency nên mọi phép "tìm ptr currency gần item" đều trượt.
 - **Fix Applied**: Nhờ user đọc giá 3 item (2 cùng giá, 1 khác giá) → lấy mọi ref tới bản ghi BaseItemTypes của 3 item → chọn ref cùng vùng → diff tìm field "2 cái bằng nhau, cái thứ 3 khác" → đi theo field đó ra nhóm giá. Xác nhận 3/3 rồi mới đóng gói tool.
 - **Prevention Rule**: Thứ UI render nhanh thì gần như luôn có nguồn tĩnh. Đừng đuổi theo text render; lấy nhãn thật từ người dùng cho vài mẫu có cấu trúc "giống/khác" rồi diff khoá ngoại giữa các bản ghi dữ liệu.
+
+### [R4] [2026-10-14] Ô lưới → pixel: khớp ảnh chụp theo bố cục có/không item đọc từ bộ nhớ (không phụ thuộc game)
+- **Target**: `tools/grid_calib.py --shot` (exileapi-rebuild), cửa sổ Purchase PoE.
+- **Symptom**: Cách "rê chuột qua ranh giới ô, bắt cạnh" ra 0 cạnh. Lần khớp ảnh đầu sai (72/120 ô, gốc vô lý).
+- **Root Cause**: (1) Field hover của game chỉ đổi khi tooltip hiện (phải dừng chuột), không theo chuyển động. (2) Đặc trưng "độ rực màu" hỏng khi người dùng gõ ô Highlight của game: mọi item không khớp bị chuyển xám.
+- **Fix Applied**: Đọc bố cục ô có/không item từ bộ nhớ; với mỗi bước ô thử, dời lưới trên bản đồ đặc trưng (độ sáng + sắc xanh nền ô, tính bằng integral image) để cộng điểm tâm ô có item, trừ điểm ô trống, lấy cực đại. Ra 120/120 ô khớp; bước 49.35px = 78 đơn vị × 1012/1600 (UI co giãn theo chiều cao 1600).
+- **Prevention Rule**: Hiệu chỉnh màn hình nên dựa trên tín hiệu có sẵn trong bộ nhớ (bố cục), không dựa vào tương tác người dùng. Đặc trưng ảnh phải chịu được các chế độ hiển thị của game (highlight, filter, hover). Luôn kiểm số ô khớp, không chỉ nhìn điểm số cao nhất.
