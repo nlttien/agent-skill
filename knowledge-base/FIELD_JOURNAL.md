@@ -323,3 +323,20 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Fix Applied**: Khi lưu, ghi `vip_date` cho mọi NV cùng acc (dùng chung helper so khớp acc `isSameAccount`, nhóm "Chưa phân nhóm" không gom). Khi hiển thị, lấy ngày mới nhất trong acc, nên dữ liệu cũ đang lệch vẫn hiện đúng mà không cần migrate. Sửa backend trên máy prod bị chặn, nên làm ở FE bằng API sẵn có (≤ 8 lời gọi).
 - **Bẫy quy trình**: `gh pr checks N --watch` ngay sau `gh pr create` có thể in "no checks reported" và thoát mã 0, vì workflow chưa kịp đăng ký. Nối `&& gh pr merge` sau đó sẽ merge khi CI chưa chạy. Cách đúng: lấy run id bằng `gh run list --branch <nhánh>` rồi `gh run watch <id> --exit-status`, kiểm `conclusion == success` rồi mới merge.
 - **Prevention Rule**: Báo lỗi mơ hồ mà luồng lưu chạy đúng: đếm dữ liệu thật theo nhóm (chỉ số tổng, băm khoá) để tìm chỗ không nhất quán, rồi hỏi người dùng bằng lựa chọn cụ thể thay vì đoán. Với mỗi thuộc tính, quyết định rõ phạm vi (NV / máy chủ / acc) và để một helper duy nhất định nghĩa "cùng acc".
+
+---
+
+## [2026-10-14] ExileApi Rebuild — bài học phiên RE bộ nhớ (repo exileapi-rebuild, RE#14)
+
+### [R1] [2026-10-14] "Đọc được tên item quanh cell" là đọc nhầm text láng giềng trong heap — kiểm chứng lại trên process mới mới lộ
+- **Target**: `tools/shop_dump.py` (cell+0x400), `tab_watch.cell_names` (sweep text quanh cell), kết luận RE#8–#13.
+- **Symptom**: Tái lập RE#13 trên process mới: "bảng tab → group → cell" vẫn tìm thấy, nhưng text ra "Fontin Smallcaps", tên người chơi trong chat, "Map Fragments"… không có item nào trên màn hình. Group tồn tại cả khi chưa mở cửa sổ, mở Merchant/Purchase không đổi.
+- **Root Cause**: Sweep mọi pointer quanh 1 object rồi lấy chuỗi UTF-16 in được sẽ luôn "thấy tên item" vì heap đầy text UI/stash/chat. Lần khớp cũ là trùng hợp + đọc bằng mắt từ ảnh.
+- **Fix Applied**: Bỏ chuỗi text-sweep. Dùng đối chiếu cấu trúc: số object sinh ra khi mở cửa sổ (79 row-record) = số ô đếm tay trên ảnh (79); toạ độ trong object (+0x150/+0x154) tái tạo đúng từng hàng; item lấy qua 1 pointer cố định (+0x440→[+0] icon path), không quét.
+- **Prevention Rule**: Một offset chỉ được coi là đúng khi (1) tái lập trên process KHÁC, (2) đối chiếu ĐẾM + VỊ TRÍ với ảnh chụp, (3) đi qua pointer cố định chứ không quét text lân cận. Kết luận bị bác phải gắn ❌ ngay tại chỗ trong doc cũ.
+
+### [R2] [2026-10-14] Tìm "trạng thái UI đang chọn": quét mọi slot trỏ vào tập ứng viên rồi poll khi người dùng thao tác theo kịch bản
+- **Target**: tab đang mở của cửa sổ Purchase (PoE, UI retained-mode).
+- **Symptom**: Diff nội dung object (RE#13) và diff field của 8 tab đều không ra cờ "đang hiển thị"; field `+0x338` khớp 1 lần nhưng thực ra là cờ "vừa được hiện" reset muộn (có lúc 6 tab cùng =0). `+0x5c0` tăng 1..8 trông như số tab nhưng là bộ đếm toàn cục (lần mở sau ra 9..16).
+- **Fix Applied**: Quét heap lấy MỌI qword trỏ vào 8 object tab (5706 slot, lọc nhanh bằng `bytes.find` trên 6 byte cao của địa chỉ), poll 0.1s trong lúc user lật theo thứ tự định trước (-8→-1→-3→-5→-1→-8) → đúng 1 slot đổi T7→T0→T2→T4→T0→T7 = con trỏ "tab đang mở" (UI element +0x150). Index tab thật = `tab+0x660`.
+- **Prevention Rule**: Ứng viên "trạng thái" phải qua kịch bản ≥4 bước có lặp lại (quay lại tab cũ) và qua đóng/mở lại cửa sổ; một bộ giá trị trông như 1..N phải kiểm lại sau khi object được tạo lại. Trên Linux đừng `pkill -f <tên script>` từ shell của agent — pattern khớp luôn chính dòng lệnh shell đó và giết nó; kill theo PID.
