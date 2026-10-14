@@ -340,3 +340,10 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Symptom**: Diff nội dung object (RE#13) và diff field của 8 tab đều không ra cờ "đang hiển thị"; field `+0x338` khớp 1 lần nhưng thực ra là cờ "vừa được hiện" reset muộn (có lúc 6 tab cùng =0). `+0x5c0` tăng 1..8 trông như số tab nhưng là bộ đếm toàn cục (lần mở sau ra 9..16).
 - **Fix Applied**: Quét heap lấy MỌI qword trỏ vào 8 object tab (5706 slot, lọc nhanh bằng `bytes.find` trên 6 byte cao của địa chỉ), poll 0.1s trong lúc user lật theo thứ tự định trước (-8→-1→-3→-5→-1→-8) → đúng 1 slot đổi T7→T0→T2→T4→T0→T7 = con trỏ "tab đang mở" (UI element +0x150). Index tab thật = `tab+0x660`.
 - **Prevention Rule**: Ứng viên "trạng thái" phải qua kịch bản ≥4 bước có lặp lại (quay lại tab cũ) và qua đóng/mở lại cửa sổ; một bộ giá trị trông như 1..N phải kiểm lại sau khi object được tạo lại. Trên Linux đừng `pkill -f <tên script>` từ shell của agent — pattern khớp luôn chính dòng lệnh shell đó và giết nó; kill theo PID.
+
+### [R3] [2026-10-14] Giá vendor "chỉ hiện khi hover" nhưng thật ra nằm trong bảng dat tĩnh — tìm bằng diff khoá ngoại theo nhãn người dùng
+- **Target**: giá item trong cửa sổ Purchase NPC (PoE), `tools/item_names.py`.
+- **Symptom**: Text giá chỉ xuất hiện trong heap lúc hover (tooltip lazy); quét text quanh ô ra đủ mọi currency (noise); không có ptr mới tới bản ghi currency khi hover.
+- **Root Cause**: Tooltip chỉ là lớp render. Giá là dữ liệu tĩnh: item → bảng giá (stride 0x34, +0x14) → nhóm giá `GemStartingLevel8to15` → [khoá currency] + [số lượng]. Khoá ngoại không trỏ thẳng tới currency nên mọi phép "tìm ptr currency gần item" đều trượt.
+- **Fix Applied**: Nhờ user đọc giá 3 item (2 cùng giá, 1 khác giá) → lấy mọi ref tới bản ghi BaseItemTypes của 3 item → chọn ref cùng vùng → diff tìm field "2 cái bằng nhau, cái thứ 3 khác" → đi theo field đó ra nhóm giá. Xác nhận 3/3 rồi mới đóng gói tool.
+- **Prevention Rule**: Thứ UI render nhanh thì gần như luôn có nguồn tĩnh. Đừng đuổi theo text render; lấy nhãn thật từ người dùng cho vài mẫu có cấu trúc "giống/khác" rồi diff khoá ngoại giữa các bản ghi dữ liệu.
