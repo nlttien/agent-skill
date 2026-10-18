@@ -489,3 +489,10 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Root Cause**: (1) Phát hiện túi hết khi **bảng Map Device đang mở** nhưng không đóng bảng; bảng mở chặn click đi bộ. (2) `Ops.goto` chờ rương mở 3 giây rồi vẫn trả True; `withdraw` đọc panel chưa mở nên "không thấy món" và việc này bị coi là rương trống.
 - **Fix Applied**: Đóng bảng trước khi trả 'empty' và ở đầu `Ops.goto`. ⚠ Lần sửa đầu dùng Space vẫn hỏng: **Space không đóng bảng Map Device** (thử trực tiếp: Space không đổi, Esc đóng). `close_panels` = Space, rồi nếu còn thấy chữ 'Highlight Maps'/'Atlas' thì Esc và kiểm lại; chỉ bấm Esc khi thấy bảng (không có bảng thì Esc mở menu game). `goto` ném lỗi nếu rương không mở. Tab không mở thì báo `Deviation`, cả hai đi qua RECOVER. Chỉ kết luận "trống" khi rương **đã mở thật** mà không có món.
 - **Prevention Rule**: Kết luận phủ định (trống / hết / không có) chỉ được rút ra khi đã **xác nhận nguồn đọc đang hiện** (panel mở, tab đúng). Đọc không được thì là lỗi, không phải "không có". Mỗi bước kết thúc bằng một bảng UI phải đóng bảng đó **và đọc lại để chắc bảng đã đóng** trước khi sang bước cần đi bộ; đừng giả định một phím đóng được mọi bảng.
+
+### [R23] [2026-10-18] Thiết bị uinput bỏ qua im lặng phím không khai báo → bot "bấm" ` về hideout nhưng đứng im
+- **Target**: `tools/screen.py` (`VMouse`), `tools/boss_loop.py` (`go_home`, `press`).
+- **Symptom**: Trong arena sau khi boss chết, log ghi "bấm phím về hideout (GRAVE) lần 1" rồi nhân vật đứng im 15+ giây.
+- **Root Cause**: `UInput({EV_KEY: [...]})` chỉ khai báo chữ, số và vài phím. `KEY_GRAVE` không có trong danh sách, nên `ui.write()` không báo lỗi nhưng kernel không phát sự kiện đó ra.
+- **Fix Applied**: Khai báo thêm `KEY_GRAVE`, Tab, Alt, mũi tên, F1–F12. `_code()` so với `ui.capabilities()` và ghi cảnh báo khi phím chưa khai báo.
+- **Prevention Rule**: Mọi phím lấy từ cấu hình người dùng phải được kiểm tra với `capabilities()` của thiết bị ảo **trước khi dùng**, rồi báo lỗi rõ ràng. Thiết bị dùng chung cho cả tiến trình thì khai báo đủ bộ phím ngay từ lúc tạo.
