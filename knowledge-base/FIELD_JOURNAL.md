@@ -496,3 +496,10 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Root Cause**: `UInput({EV_KEY: [...]})` chỉ khai báo chữ, số và vài phím. `KEY_GRAVE` không có trong danh sách, nên `ui.write()` không báo lỗi nhưng kernel không phát sự kiện đó ra.
 - **Fix Applied**: Khai báo thêm `KEY_GRAVE`, Tab, Alt, mũi tên, F1–F12. `_code()` so với `ui.capabilities()` và ghi cảnh báo khi phím chưa khai báo.
 - **Prevention Rule**: Mọi phím lấy từ cấu hình người dùng phải được kiểm tra với `capabilities()` của thiết bị ảo **trước khi dùng**, rồi báo lỗi rõ ràng. Thiết bị dùng chung cho cả tiến trình thì khai báo đủ bộ phím ngay từ lúc tạo.
+
+### [R24] [2026-10-18] Quét entity 0.7s → 0.02s: entity chỉ nằm trong vài khối nhớ
+- **Target**: `tools/world.py` (`entity_addrs`, `entities`, `World.refresh`), `tools/boss_loop.py` (`scan`).
+- **Symptom**: Mỗi bước của bot chậm khoảng 0,7–0,9 giây vì phải quét vtable entity trên toàn bộ 3,6 GB heap.
+- **Root Cause**: Không có. Đo thực tế: 89 entity nằm trong **6 khối 1 MB** (5 vùng heap). Quét toàn bộ là phí.
+- **Fix Applied**: Ghi nhớ các khối 4 MB có entity sau mỗi lần quét toàn bộ. Lần sau chỉ quét các khối đó cộng 1 khối kề mỗi bên (~0,02 giây). Cứ 2 giây quét toàn bộ một lần ở **luồng nền** để bắt entity mới được cấp phát ở khối khác. Khi đổi khu vực hoặc không thấy nhân vật thì quét toàn bộ ngay.
+- **Prevention Rule**: Trước khi tối ưu một lần quét heap, hãy đo **sự phân bố** của kết quả (theo khối 1/4/16 MB). Đối tượng game thường được cấp phát theo pool, nên quét theo khối nóng kèm làm mới định kỳ ở nền thường đủ, không cần dò con trỏ danh sách entity (vốn phải dò lại mỗi bản game).
