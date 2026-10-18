@@ -482,3 +482,10 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Symptom/Yêu cầu**: Người dùng điều khiển qua overlay và web (sau này 10 máy), cần nút Reset khi bot kẹt.
 - **Fix Applied**: `botctl` là lõi chung (start / stop / reset / status, tìm PID theo tên script trong `/proc`). Reset = SIGUSR1: bot ném `ResetRequested`, bỏ bước đang làm, về hideout, xoá bộ đếm phục hồi. Không phản hồi trong 15 giây thì TERM, rồi KILL, rồi bật lại. Lúc chờ hoặc nghỉ dài, bot vẫn ghi trạng thái mỗi 5 giây kèm `sleep_until`. Web mở với `--lan` thì bắt token, localhost thì không.
 - **Prevention Rule**: (a) Tín hiệu điều khiển phải phân biệt: SIGTERM/SIGINT = dừng hẳn, SIGUSR1 = reset, chuột thật / End = người dùng giành quyền (không tự phục hồi). (b) "Kẹt" do bên ngoài phán đoán phải dựa vào nhịp trạng thái có hẹn giờ ngủ, không chỉ "lâu không log". (c) Thao tác chờ lâu (reset) chạy ở luồng nền để không treo giao diện Qt.
+
+### [R22] [2026-10-18] "Không đọc thấy món" bị hiểu thành "rương trống" — bảng Map Device còn mở chặn đi tới rương
+- **Target**: `tools/boss_cycle.py` (RESTOCK), `tools/stash_ops.py` (`Ops.goto` / `withdraw`), `tools/boss_loop.py` (`open_map`).
+- **Symptom**: Túi hết Invitation → bot đi lấy ở Guild Stash nhưng nhân vật đứng im, người dùng phải tự tắt; log ghi "rương guild tab 'boss' trống" rồi dừng hẳn với lý do hết Invitation, trong khi rương vẫn còn.
+- **Root Cause**: (1) Phát hiện túi hết khi **bảng Map Device đang mở** nhưng không đóng bảng; bảng mở chặn click đi bộ. (2) `Ops.goto` chờ rương mở 3 giây rồi vẫn trả True; `withdraw` đọc panel chưa mở nên "không thấy món" và việc này bị coi là rương trống.
+- **Fix Applied**: Đóng bảng (Space) trước khi trả 'empty' và ở đầu `Ops.goto`. `goto` ném lỗi nếu rương không mở. Tab không mở thì báo `Deviation`, cả hai đi qua RECOVER. Chỉ kết luận "trống" khi rương **đã mở thật** mà không có món.
+- **Prevention Rule**: Kết luận phủ định (trống / hết / không có) chỉ được rút ra khi đã **xác nhận nguồn đọc đang hiện** (panel mở, tab đúng). Đọc không được thì là lỗi, không phải "không có". Mỗi bước kết thúc bằng một bảng UI phải đóng bảng đó trước khi sang bước cần đi bộ.
