@@ -418,3 +418,67 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Root Cause**: (1) Dữ liệu component bị rỗng mà engine vẫn dùng, nên phần nạp chậm hẳn (chưa rõ chi tiết). (2) Material không có graph thì game dùng material mặc định để vẽ. Black-screen không lộ lỗi này vì cả màn hình đã đen. (3) Nguyên nhân treo là việc component tồn tại trên entity ở hideout, không phải việc icon hiện hay ẩn, nên ẩn bằng script sau khi entity đã tạo ra là quá muộn.
 - **Fix Applied**: Giữ nguyên khối `SkinMesh`. Ẩn mesh bằng material dùng graph có sẵn của game `Metadata/Effects/Graphs/General/invisible.fxgraph` (AlphaTest, alpha = 0). Load trở lại 2–3 giây. Bỏ `monster-icons`, gỡ bằng `fix-hideout`.
 - **Prevention Rule**: (a) Chỉ dùng kỹ thuật mà game hoặc patch khác đã chạy thực tế. Nếu kỹ thuật đó vốn ẩn mọi thứ (màn hình đen), phải thử lại khi màn hình còn nhìn thấy. (b) Muốn "không vẽ" thì tìm sẵn trong game một graph hoặc material có tác dụng đó (`ls metadata/effects/graphs/general | grep invis`), đừng tự chế. (c) Model quái lấy material qua file `.sm` (`art/textures/monsters`), không ở cạnh `.ao`; đọc `.sm` trước khi giới hạn thư mục. (d) Thêm component vào base class `monster.ot` thì không lọc được bằng script; bỏ hẳn hướng này. (e) Script chờ "game tắt" bằng `pgrep -f '<chuỗi>'` sẽ tự khớp với chính dòng lệnh của nó; kiểm `/proc/*/comm` hoặc fd thay vì vậy. (f) Mỗi lần chỉ áp MỘT patch mới, kể cả khi người dùng muốn nhanh.
+
+## [2026-10-17/18] ExileApi Rebuild — vòng đánh boss tự động (boss_loop.py / boss_cycle.py), điều khiển từ xa
+
+### [R13] [2026-10-17] `find_pid` bắt nhầm wrapper khởi chạy game (umu-run / Proton): đọc RAM ra toàn số 0
+- **Target**: `tools/proc.py` `find_pid`, mọi tool đọc RAM qua `/proc/<pid>/mem`.
+- **Symptom**: `probe` báo "nhân vật: None, entity: 0". Doctor báo "không đọc được PE header (quyền?)" dù `ptrace_scope = 0`.
+- **Root Cause**: Game mở qua `umu-run` (Python), Proton (`python3 …/proton waitforexitandrun …PathOfExile.exe`), rồi mới tới tiến trình wine `Main`. Dòng lệnh của cả ba đều chứa "PathOfExile", nên vòng quét `/proc` bắt được wrapper trước.
+- **Fix Applied**: Chỉ nhận tiến trình có **`argv[0]` kết thúc bằng `pathofexile*.exe`**. Tiến trình wine có argv[0] = `S:\…\PathOfExile.exe`, còn wrapper có argv[0] = `/usr/bin/python3`.
+- **Prevention Rule**: Tìm tiến trình game thì so `argv[0]` (hoặc exe được map), không tìm chuỗi con trong cả dòng lệnh. Đổi launcher (Steam / umu / Lutris) thì chạy lại doctor trước.
+
+### [R14] [2026-10-17] Biết boss chết: chữ "Map Complete" không đáng tin, xác boss còn trong danh sách entity → đọc MÁU từ component sinh tồn
+- **Target**: `tools/boss_loop.py` `fight()`, `life_of()`.
+- **Symptom**: Boss đã chết, người chơi thấy map hoàn thành, nhưng bot vẫn đánh tiếp hoặc lại vào map đó.
+- **Root Cause**: (1) Chữ "Map Complete" không nằm trong cây UI. Quét toàn bộ 59k phần tử, kể cả phần tử ẩn, cũng không thấy (chỉ hiện khi bảng khu vực mở). (2) Entity `CleansingBoss@84` vẫn còn sau khi chết, nên dấu hiệu "boss biến mất N giây" vô dụng. (3) Envoy không xuất hiện khi có Maven theo dõi.
+- **Fix Applied**: Tìm component sinh tồn bằng cách **hiệu chỉnh theo một con số người dùng xác nhận**: quét component của nhân vật tìm cặp int (max, cur) bằng ES người dùng đọc trong bảng Character. Kết quả là component `vt 0x1435a7340`, gồm: Life max/cur `+0x1a4/+0x1a8`, Mana `+0x1f4/+0x1f8`, ES `+0x23c/+0x240` (bản 3.29.3). Exarch đã chết đọc ra `175.162.768 / 0`. Nhân vật CI đọc ra Life `1/1`, nên lần quét đầu lọc số ≥ 100 đã bỏ sót Life.
+- **Prevention Rule**: (a) Trạng thái sống/chết lấy từ Life cur = 0, không lấy từ chữ trên UI hay việc entity biến mất. (b) Dò offset chỉ số thì hiệu chỉnh bằng một giá trị người dùng nhìn thấy, và hỏi rõ đó là Life, ES hay Mana. (c) Build CI / Low Life có Life = 1, nên đừng lọc "số hợp lý ≥ 100". (d) Offset gắn với bản game, đổi patch phải đo lại.
+
+### [R15] [2026-10-17] Arena của Invitation chặn `/hideout` ("You can't go to this area from here.")
+- **Target**: `go_home()`.
+- **Symptom**: Bot gõ `/hideout` rồi chờ mãi, không đổi khu vực. Người dùng phải bấm dừng.
+- **Root Cause**: Khu vực boss mở bằng Invitation không cho dùng lệnh `/hideout`. Phản hồi chỉ hiện trong chat, ghi ở `logs/Client.txt`.
+- **Fix Applied**: Về hideout bằng **phím của người dùng** (`` ` ``, `home_key` = GRAVE). Dự phòng: đi tới portal thoát (`PrimordialBossPortal`, nhãn = tên hideout) rồi click nhãn. Bỏ hẳn `/hideout`.
+- **Prevention Rule**: Lệnh chat có thể bị khu vực chặn. Gửi lệnh xong phải đọc phản hồi trong `Client.txt` hoặc kiểm đổi khu vực trong thời gian ngắn. Hỏi người dùng cách họ thao tác tay trước khi đoán.
+
+### [R16] [2026-10-17] Đặt Invitation vào Map Device: đếm túi đọc trễ → chuột phải lần 2 đặt THÊM tấm; nút "activate" ẩn có toạ độ âm
+- **Target**: `open_map()` / `put_invitation()`.
+- **Symptom**: Bot báo "không đặt được Invitation" 3 lần, trong khi lần chuột phải đầu đã ăn (túi 3 → 2). Thiết bị có thể bị đặt 2 tấm, Activate tiêu cả 2. Sau đó bot click `activate` tại (316, −113) và lỗi "ngoài vùng game".
+- **Root Cause**: (1) Số món trong túi đọc từ RAM chưa cập nhật ngay sau click. (2) Cây UI có nhiều element cùng chữ `activate`, phần tử đầu tiên tìm được là bản ẩn hoặc sót, toạ độ âm. (3) Nút Activate chỉ hiện khi thiết bị đã có món.
+- **Fix Applied**: Chuột phải **một lần, không đếm túi**. Thành công khi **nút Activate hiện trong màn hình**. Hàm `visible_text()` chỉ nhận element có tâm nằm trong vùng game. Mở thiết bị thấy Activate sẵn thì không đặt thêm.
+- **Prevention Rule**: Xác nhận thao tác bằng hiệu ứng UI đáng tin (nút mới hiện), không bằng bộ đếm có thể đọc trễ. Không lặp một thao tác tiêu tài nguyên chỉ vì chưa thấy xác nhận. Tìm element theo chữ thì lọc theo toạ độ trong màn hình.
+
+### [R17] [2026-10-17] Portal của map ĐÃ XONG còn mở ở hideout: bot vào lại map cũ, click Map Device trúng portal
+- **Target**: `run_once()` / `open_map()` / `boss_cycle.s_hideout`.
+- **Symptom**: Bot vào lại arena đã hoàn thành. Click nhãn Map Device lại vào portal (4 portal vây quanh thiết bị).
+- **Root Cause**: Portal không biết map phía sau đã xong hay chưa. Khi mở map mới, nhãn portal cũ hiện ngay sau Activate, nên "nhãn portal hiện = vào được" bắt nhầm portal cũ.
+- **Fix Applied**: Về hideout sau map xong thì **ghi địa chỉ entity các portal đang mở** vào `boss_done_portals.json`. Địa chỉ ổn định trong cùng instance hideout, ra vào hideout hay mở map mới thì thành entity mới. Lần sau nếu mọi portal đều nằm trong danh sách thì mở map mới. Sau Activate, nếu trước đó đã có portal thì chờ **entity portal MỚI** mới vào.
+- **Prevention Rule**: Không tin "nhãn hiện" khi đối tượng cũ cùng loại có thể còn trên màn hình. So tập entity trước/sau thao tác. Click gần cụm đối tượng tương tác được (portal) thì kiểm điểm click có trùng nhãn khác không (chưa sửa phần click Map Device).
+
+### [R18] [2026-10-17] Dừng khẩn cấp bằng phím: `interrupt_main()` không cắt ngang `time.sleep`; phím trùng phần mềm khác
+- **Target**: `tools/screen.py` `start_user_guard()`.
+- **Symptom**: Bot đang `sleep` thì phải chờ hết sleep mới dừng (đo được 5 giây). F12 trùng phím chụp màn hình của Steam.
+- **Root Cause**: `_thread.interrupt_main()` chỉ giả lập tín hiệu, được xử lý khi luồng chính quay lại chạy bytecode. `time.sleep` không bị cắt.
+- **Fix Applied**: Luồng evdev nghe bàn phím thật, bỏ thiết bị ảo `exileapi-*` và thiết bị có chữ "macro". Gặp phím dừng (người dùng chọn **End**) thì `os.kill(os.getpid(), SIGINT)`: tín hiệu thật cắt ngang sleep sau 0,3 giây. Lý do dừng lưu vào `_GUARD['hit']` để log ghi rõ, vì KeyboardInterrupt từ tín hiệu có nội dung rỗng.
+- **Prevention Rule**: Cần dừng ngay thì gửi tín hiệu thật cho chính tiến trình. Phím dừng phải hỏi người dùng, tránh phím game hoặc phần mềm khác dùng. Thiết bị phát lại phím thật (passthrough) vẫn nghe, thiết bị tự phát (macro) thì bỏ.
+
+### [R19] [2026-10-17] Chương trình thử nghiệm ghi vào Content.ggpk khi game đang mở; rsync từ máy khác cũng đang đọc file
+- **Target**: PoeRedux. Bài học chung cho mọi công cụ ghi file đang được tiến trình khác dùng.
+- **Symptom**: CLI chính có kiểm tra "game đang mở thì từ chối", nhưng một chương trình thử nghiệm viết nhanh gọi thẳng thư viện đã ghi patch lỗi vào game lúc game đang chạy. Lần sau CLI chặn ghi vì `rsync --server --sender` (một máy khác kéo thư mục game) đang mở file.
+- **Root Cause**: Kiểm tra an toàn nằm ở lớp CLI, không nằm ở lớp ghi. Mọi đường ghi khác đều bỏ qua nó.
+- **Fix Applied**: Chờ tới khi không còn tiến trình nào mở file (quét `/proc/*/fd`, cả rsync) rồi mới ghi. Ghi rõ quy tắc vào `CLAUDE.md` của PoeRedux.
+- **Prevention Rule**: Kiểm tra "có ai đang mở file không" phải đặt **trong chính hàm ghi**, hoặc mọi script (kể cả script thử nghiệm) đều phải gọi. Người đọc file cũng tính (rsync, backup), vì ghi giữa chừng sẽ làm hỏng bản chép.
+
+### [R20] [2026-10-17] `pkill -f <mẫu>` / `pgrep -f` khớp luôn shell đang chạy lệnh → tự giết shell (exit 144)
+- **Target**: lệnh shell của agent.
+- **Symptom**: `pkill -f "boss_loop.py once"` trả exit 144, các lệnh sau trong cùng dòng không chạy.
+- **Root Cause**: Dòng lệnh của `bash -c '… pkill -f "boss_loop.py once" …'` cũng chứa mẫu đó.
+- **Fix Applied**: Viết mẫu dạng `[b]oss_loop.py` (regex vẫn khớp tiến trình thật, nhưng chuỗi lệnh chứa `[b]` thì không khớp), hoặc neo `^python3 -u boss_loop.py`.
+- **Prevention Rule**: Luôn dùng mẹo `[x]` hoặc neo `^` khi `pkill -f` / `pgrep -f` trong lệnh ghép.
+
+### [R21] [2026-10-18] Điều khiển bot không cần terminal: reset mềm bằng SIGUSR1, nhịp trạng thái để không báo kẹt nhầm
+- **Target**: `tools/botctl.py`, `tools/control_server.py`, `tools/boss_cycle.py`, `tools/overlay.py`.
+- **Symptom/Yêu cầu**: Người dùng điều khiển qua overlay và web (sau này 10 máy), cần nút Reset khi bot kẹt.
+- **Fix Applied**: `botctl` là lõi chung (start / stop / reset / status, tìm PID theo tên script trong `/proc`). Reset = SIGUSR1: bot ném `ResetRequested`, bỏ bước đang làm, về hideout, xoá bộ đếm phục hồi. Không phản hồi trong 15 giây thì TERM, rồi KILL, rồi bật lại. Lúc chờ hoặc nghỉ dài, bot vẫn ghi trạng thái mỗi 5 giây kèm `sleep_until`. Web mở với `--lan` thì bắt token, localhost thì không.
+- **Prevention Rule**: (a) Tín hiệu điều khiển phải phân biệt: SIGTERM/SIGINT = dừng hẳn, SIGUSR1 = reset, chuột thật / End = người dùng giành quyền (không tự phục hồi). (b) "Kẹt" do bên ngoài phán đoán phải dựa vào nhịp trạng thái có hẹn giờ ngủ, không chỉ "lâu không log". (c) Thao tác chờ lâu (reset) chạy ở luồng nền để không treo giao diện Qt.

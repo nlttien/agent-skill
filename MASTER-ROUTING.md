@@ -21,6 +21,8 @@ User Prompt
     │
     ├── [R6] Shop buyer / Currency trade / Stash deposit / WebSocket? ──────► skills/trade-buyer-diagnostics/
     │
+    ├── [R8] Patch Content.ggpk / PoeRedux / màn hình đen / treo sau patch? ─► skills/ggpk-file-patching/
+    │
     └── [R7] Unknown edge case / Bug resolved / Lesson learned? ────────────► skills/self-evolving-knowledge-base/
 ```
 
@@ -47,6 +49,10 @@ User Prompt
 #### `[R5] Single-File Packager & Deployment`
 - **Triggers**: Building `.exe` files into `dist/`, payload packaging, DLL synchronization, AppData caching issues.
 - **Skill**: `.agents/skills/single-file-packager-deployment/SKILL.md`
+
+#### `[R8] GGPK File Patching (PoeRedux)`
+- **Triggers**: sửa file game trong Content.ggpk, PoeRedux patch/restore/repair, màn hình đen, treo khi vào khu vực sau patch.
+- **Skill**: `.agents/skills/ggpk-file-patching/SKILL.md`
 
 #### `[R6] Trade Buyer & Stash Automation`
 - **Triggers**: ShopAutoBuyer window recognition, Currency Exchange collector, StashDepositService item clicks, Trade API rate limits.

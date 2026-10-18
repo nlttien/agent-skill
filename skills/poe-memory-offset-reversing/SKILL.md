@@ -56,3 +56,17 @@ public static Element? FindElementByText(Element root, string targetText)
 1. Check `Logs/` for `LoadAssembly -> IOException` or `NullReferenceException`.
 2. Inspect `GameOffsets/` and `ExileCore/PoEMemory/` mappings.
 3. Use `DevTree` plugin in-game to view real-time memory dumps of the target entity.
+
+---
+
+## 🧪 Kỹ thuật đã dùng thật (exileapi-rebuild, Linux `/proc/<pid>/mem`) — 2026-10-17
+
+- **Hiệu chỉnh bằng giá trị người dùng xác nhận**: cần offset chỉ số (Life/ES/Mana) → hỏi người dùng 1 con số thấy
+  trên UI (bảng Character) → quét các component của entity nhân vật tìm cặp int (max, cur) bằng số đó → xác định
+  vtable component + offset → đọc cùng chỗ trên entity khác (boss sống/chết) để xác nhận. Hỏi rõ số đó là Life hay ES
+  (CI: Life = 1 — đừng lọc ≥ 100). Kết quả bản 3.29.3: `vt 0x1435a7340`, Life `+0x1a4/+0x1a8`, Mana `+0x1f4/+0x1f8`,
+  ES `+0x23c/+0x240`. Danh sách component: `[ent+0x10, ent+0x18)` (vector con trỏ).
+- **Chữ UI chỉ có khi panel mở**: trước khi dựa vào 1 chuỗi UI ("Map Complete"), quét TOÀN cây UI kể cả phần tử ẩn để
+  chắc nó tồn tại trong trạng thái cần dùng.
+- **Element trùng chữ**: lọc theo cờ hiển thị VÀ toạ độ trong màn hình — bản sót có toạ độ âm.
+- **Địa chỉ entity ổn định trong 1 instance khu vực**, đổi khi ra vào → dùng làm khoá tạm (vd nhớ portal map đã xong).

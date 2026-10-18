@@ -34,6 +34,7 @@ Welcome to the **ExileApi Agent Router**. This system equips AI agents with dete
 | **R5** | Single-File Executable Packaging | `skills/single-file-packager-deployment/SKILL.md` |
 | **R6** | Trade Buyer & Stash Automation | `skills/trade-buyer-diagnostics/SKILL.md` |
 | **R7** | Self-Evolving Knowledge Logging | `skills/self-evolving-knowledge-base/SKILL.md` |
+| **R8** | GGPK File Patching (PoeRedux) | `skills/ggpk-file-patching/SKILL.md` |
 
 ---
 
@@ -59,6 +60,7 @@ Welcome to the **ExileApi Agent Router**. This system equips AI agents with dete
 │   ├── boss-encounter-tuning/SKILL.md
 │   ├── single-file-packager-deployment/SKILL.md
 │   ├── trade-buyer-diagnostics/SKILL.md
+│   ├── ggpk-file-patching/SKILL.md
 │   └── self-evolving-knowledge-base/SKILL.md
 └── knowledge-base/
     ├── FIELD_JOURNAL.md

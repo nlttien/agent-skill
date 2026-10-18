@@ -50,3 +50,15 @@ powershell -ExecutionPolicy Bypass -File "d:\codecuatien\ExileApi-Compiled\BUILD
    Always copy output assemblies to both `Plugins/Compiled/<Name>/` and `Plugins/Compiled/<Name>.dll`.
 4. **Clean Temp Package**:
    Always remove stale `payload.zip` and `temp_pkg/` before zipping.
+
+---
+
+## 🐧 Đóng gói Linux cho app .NET (PoeRedux CLI) — 2026-10-17
+
+- **Self-contained**: `dotnet publish -c Release -r linux-x64 --self-contained -p:DebugType=none` → máy đích không
+  cần .NET. Native lib (vd `liboo2core.so`) khai báo `<None … CopyToPublishDirectory="PreserveNewest">`.
+- **AppImage** (1 file, bấm đúp là chạy): AppDir = `usr/bin/` (bản publish) + `AppRun` (không tham số → mở GUI zenity,
+  có tham số → chạy CLI) + `.desktop` + icon SVG (+ `.DirIcon`) → `ARCH=x86_64 appimagetool --no-appstream AppDir out.AppImage`
+  (appimagetool 1.9.0). Máy đích cần FUSE (libfuse2) và quyền chạy (Properties → Is executable).
+- Ổ `/` đầy: đặt .NET SDK, NUGET_PACKAGES, TMPDIR, DOTNET_CLI_HOME trên ổ khác (script env riêng).
+- Release: `gh release create <tag> <file> -R <fork> --target <sha>`; tải về `cmp` với file gốc để xác nhận.
