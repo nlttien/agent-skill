@@ -503,3 +503,10 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Root Cause**: Không có. Đo thực tế: 89 entity nằm trong **6 khối 1 MB** (5 vùng heap). Quét toàn bộ là phí.
 - **Fix Applied**: Ghi nhớ các khối 4 MB có entity sau mỗi lần quét toàn bộ. Lần sau chỉ quét các khối đó cộng 1 khối kề mỗi bên (~0,02 giây). Cứ 2 giây quét toàn bộ một lần ở **luồng nền** để bắt entity mới được cấp phát ở khối khác. Khi đổi khu vực hoặc không thấy nhân vật thì quét toàn bộ ngay.
 - **Prevention Rule**: Trước khi tối ưu một lần quét heap, hãy đo **sự phân bố** của kết quả (theo khối 1/4/16 MB). Đối tượng game thường được cấp phát theo pool, nên quét theo khối nóng kèm làm mới định kỳ ở nền thường đủ, không cần dò con trỏ danh sách entity (vốn phải dò lại mỗi bản game).
+
+### [R25] [2026-10-19] Phím skill bị game bỏ qua khi chuột nằm trên giao diện; skill phụ thuộc minion phải chờ minion xuất hiện
+- **Target**: `tools/boss_cycle.py` (`check_guardian`), `tools/boss_loop.py` (`guardian`).
+- **Symptom**: Bot bấm E (gọi Animated Guardian) 6 lần nhưng không có Guardian nào được gọi ra. Khi bấm E rồi R cách nhau 0,12–0,35 giây thì R bị "hụt".
+- **Root Cause**: (1) Con trỏ chuột nằm trên giao diện (túi, rương, thanh skill), nên game không thi triển skill. (2) R lấy buff **từ** Guardian, mà Guardian xuất hiện khoảng 1,5 giây sau E, nên lúc bấm R thì Guardian chưa có.
+- **Fix Applied**: Đóng các bảng, đặt chuột lên mặt đất cạnh nhân vật, bấm E, **chờ Guardian xuất hiện** (con trỏ trực tiếp: component người chơi vt `0x14359f5f8` +0x198 trỏ tới entity Guardian), rồi mới bấm R. Máu Guardian đọc ở Life +0x1a4/+0x1a8 (người dùng đã xác nhận đúng).
+- **Prevention Rule**: Trước khi bấm phím skill, đặt chuột trên mặt đất trong vùng chơi. Skill phụ thuộc trạng thái (minion, buff) phải chờ **xác nhận trạng thái đó trong RAM**, không chờ theo thời gian cố định.
