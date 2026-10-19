@@ -531,3 +531,10 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Root Cause**: (1) Số Chaos lấy từ panel rương trong RAM (41,002) là bản của lần mở tab trước đó rất lâu, trong khi rương thật chỉ còn **119**. Game không hiện chữ nào khi không đủ tiền mua. (2) Game điền tỉ giá trễ, và khi nguồn không có Divine thì để mặc định 1:1, kèm cảnh báo `Unfavourable Trade Ratio`. Code không có ngưỡng chặn (`min_ratio=None`). (3) `bag_goods_any()` chạy **sau** khi Space đóng túi, đọc túi ẩn ra 0 món nên bỏ qua nâng cấp mà không ghi log.
 - **Fix Applied**: Đếm Chaos thật bằng cách mở tab Curr lúc khởi động và mỗi khi mua hụt không rõ lý do. Chặn cứng ở bước đổi: chọn sai món, tỉ giá dưới 50/1, hoặc game cảnh báo `Unfavourable Trade Ratio` thì không đặt lệnh. Hết Chaos và hết Divine thì dừng hẳn (`OutOfMoney`). Nâng cấp: mở rương orb trước (túi hiện theo) rồi mới đếm món.
 - **Prevention Rule**: Số liệu UI đọc từ RAM (rương, sổ) chỉ đúng tại **lần mở gần nhất**. Trước khi ra quyết định tốn tiền, phải mở lại để đọc số mới. Mọi lệnh giao dịch phải có **ngưỡng chặn cứng** về tỉ giá và kiểm tra cảnh báo của chính game. Đọc ra số mặc định (1:1, 0) thì coi là "chưa đọc được", không coi là giá trị.
+
+### [R29] [2026-10-19] Sổ tài nguyên chỉ đếm món trong danh sách theo dõi → "0 Divine" là "không đếm", không phải "không có"
+- **Target**: `tools/resources.py` (`load_watch`), `tools/buy_loop.py` (`do_refill` kiểm hết Divine).
+- **Symptom**: Bot dừng với "HẾT TIỀN: rương không còn Divine", trong khi tab Curr có **319 Divine**.
+- **Root Cause**: `data/watch.json` (người dùng tự đặt) không có `Divine Orb`. Scanner chỉ đếm món trong danh sách này, nên sổ không có khoá Divine, và tổng tính ra bằng 0.
+- **Fix Applied**: `load_watch()` luôn thêm `Chaos Orb` và `Divine Orb`. Thử lại: đổi 50 Divine được 16,670 Chaos (tỉ giá 340/1), sau đó bot mua tiếp được.
+- **Prevention Rule**: Khi kiểm "hết X" từ một nguồn có lọc, phải chắc chắn X **nằm trong bộ lọc**. Thiếu khoá phải coi là "chưa biết", không coi là 0. Món mà logic điều khiển cần thì phải luôn được đếm, không phụ thuộc cấu hình người dùng.
