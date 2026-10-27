@@ -53,7 +53,9 @@ Chi tiết từng bước + số liệu: `knowledge-base/FIELD_JOURNAL.md` [W29]
    tổng toàn bảng + KPI cache 10–15 s (xoá cache khi đổi trạng thái). Không `SUM(CASE…)` trên cả 50k dòng mỗi lần tải.
 7. **Cache có hạn trong Frappe v15: đọc phải truyền `expires=True`.**
    `frappe.cache.get_value(k)` khi trượt sẽ ghi `None` vào `frappe.local.cache`; `set_value(k, v, expires_in_sec=…)`
-   chỉ ghi Redis, không sửa local cache → mọi lần đọc sau trong cùng tiến trình vẫn `None` → cache không bao giờ trúng.
+   chỉ ghi Redis, không sửa local cache → mọi lần đọc sau **trong cùng request / job** (`frappe.local` sống theo request)
+   vẫn `None`. Request web mới thì sạch, nên bẫy lộ rõ nhất ở job / `bench execute` / hàm gọi lại nhiều lần trong 1 request
+   (stress test: câu đếm chạy lại mỗi lần gọi).
    ```python
    v = frappe.cache.get_value(KEY, expires=True)
    if v is None:
@@ -66,7 +68,11 @@ Chi tiết từng bước + số liệu: `knowledge-base/FIELD_JOURNAL.md` [W29]
 9. **1 API trả cả rows + tổng + KPI + đếm tab**; lấy đúng cột cần; tính trạng thái hiển thị (deadline…) ở server cho 20 dòng.
    Tránh: `frappe.get_doc` trong vòng lặp (50 dòng = 44 ms, 6× chậm hơn 1 câu SQL), tải hết về FE
    (`get_all(limit=0)` 50k = 2,6 s / 47 MB), `fields=["*"]`.
-10. **Mọi cột khai báo trong JSON doctype**, không `ALTER TABLE` lúc chạy (site mới tạo từ repo sẽ thiếu cột — W28).
+10. **Frappe `Int` = `int(11)` 32-bit (≤ 2.147.483.647)** — không có BigInt. Cột thứ tự theo thời gian: tính theo **phút**
+    (≈ 29,6 triệu năm 2026), không theo giây (1,7 tỷ + offset sẽ tràn). Mẫu: chưa xong = phút hạn; không hạn = 900.000.000;
+    đã xong = 1e9 + (1e9 − phút hoàn tất). Số thứ tự liên tiếp an toàn đa luồng: `frappe.model.naming.getseries(key, digits)`
+    (UPDATE nguyên tử trên `tabSeries`). Index kép khai trong `on_doctype_update()` của controller (Frappe gọi khi migrate).
+11. **Mọi cột khai báo trong JSON doctype**, không `ALTER TABLE` lúc chạy (site mới tạo từ repo sẽ thiếu cột — W28).
     Index: `search_index` cho cột đơn; index kép tạo bằng `frappe.db.add_index(dt, [cols], name)` trong `after_migrate`
     hoặc patch. DDL trong code: `frappe.db.sql_ddl` / `add_index` (lệnh `ALTER` qua `frappe.db.sql` →
     `ImplicitCommitError`).

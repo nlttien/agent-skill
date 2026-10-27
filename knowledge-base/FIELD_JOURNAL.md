@@ -412,6 +412,16 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
   - v4/v5 (owner: "đã hoàn thành chỉ cần đếm số 1 2 3"; "giống nhau chỉ cần đánh số, active chỉ 0 và 1, nối bảng giải nghĩa"): `done_seq` 1,2,3… cho đơn đã xong → trang số bất kỳ = 1 range; `status_code` TINYINT + doctype danh mục (`code`, `label`, `is_done`, `color`), cột `is_done` 0/1, index `(is_done, sort_rank, name)`; đọc cache bằng `get_value(k, expires=True)`. Kết quả: trang 1 = 20 dòng, trang 17/100/1.000/2.500 = **21 dòng**, mọi trang **~7 ms**; 40 người đồng thời p95 300 ms, ~230–290 req/s, 0 lỗi.
 - **Prevention Rule**: Xem `skills/frappe-large-list-query/SKILL.md`. Tóm tắt: giá trị lặp → số nhỏ (0/1, 1..n) + bảng danh mục giải nghĩa; thuộc tính dùng để lọc/sắp → cột riêng có index; thứ tự → cột tính sẵn; nhóm đã xong → số thứ tự liên tiếp cho trang số; không OFFSET sâu; con trỏ dạng range; KPI/đếm chỉ trên tập nhỏ + cache; cache TTL đọc bằng `expires=True`; luôn đo số dòng DB thực đọc, không đoán.
 
+### [W30] [2026-10-27] Làm backend Service Boosting trên Frappe local: email user chữ thường, Int 32-bit, quyền đọc doctype vs ảnh riêng tư
+- **Target**: `gege_custom` nhánh `feat/service-boosting` (repo Account-manager-backend) — doctype `Boost *`, `api/boost_order.py`, `api/boost_core.py`; test trên pod Frappe local (W28).
+- **Symptom / Root Cause / Fix**:
+  1. Test lỗi "đã có người nhận" / không thấy mật khẩu dù đúng người: **Frappe lưu tên User (email) chữ thường**, test `set_user("T-BOOST-a@…")` → `session.user` giữ chữ hoa, so `==` với `assigned_user` (chữ thường) sai. Fix: helper `same_user(a, b)` so `lower()` ở mọi chỗ so user (đúng quy tắc AGENTS.md "không so khớp cứng"); `assign_to` chuẩn hoá về `User.name` thật; fixture email viết thường.
+  2. Cột `sort_rank` theo giây sẽ tràn: **Frappe `Int` = `int(11)`**, không có BigInt → đổi sang phút.
+  3. Booster/Farmer cần tải **ảnh riêng tư** gắn vào đơn → file private kiểm quyền `read` trên doctype đính kèm → phải cấp `read` doctype cho họ; hệ quả: REST `/api/resource` lộ `account_login`. Fix: field tài khoản khách `permlevel: 1`, chỉ role quản lý có quyền đọc permlevel 1; API tự kiểm (người được giao / quyền riêng). Password field Frappe luôn che, không lộ.
+  4. `ruff check --fix --select RUF100` xoá cả `# noqa: S608` cần thiết sau khi `ruff format` dời comment → đặt lại noqa ở **dòng đầu** chuỗi 1 dòng / **dòng cuối** chuỗi nhiều dòng.
+  5. `test_action_access_coverage` đỏ sẵn trên `main` (module `booster_account` có `only_for` chưa vào manifest) — kiểm bằng `git stash` chạy lại trên `main` trước khi kết luận lỗi của mình.
+- **Prevention Rule**: So user luôn không phân biệt hoa/thường; fixture email viết thường. Cột số lớn trong Frappe: kiểm giới hạn `int(11)`. Cần cho người dùng xem file private của doctype → cấp `read` doctype + `permlevel 1` cho trường nhạy cảm, đừng nghĩ "chỉ cho ghi qua API" là đủ. Test đỏ ngoài phạm vi → chạy lại trên nhánh gốc để phân định.
+
 ### [R6] [2026-10-14] "vtable gần nhất phía trước" không phải chủ của ô nhớ: offset đúng nhờ trùng hợp, sang cửa sổ khác thì gãy
 - **Target**: con trỏ "tab đang mở" (`tools/tab_live.py`, `relocate.py active`), PoE.
 - **Symptom**: Với Lilly thì tool chạy, sang shop người chơi khác (thanh tab có tên) thì "không quét được", dù slot_hunt cho thấy cùng một ô nhớ vẫn đổi đúng theo tab.
