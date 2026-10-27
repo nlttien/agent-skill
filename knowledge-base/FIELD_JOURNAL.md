@@ -641,3 +641,14 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Root Cause**: `frappe.model.optional_fields = ("_user_tags", "_comments", "_assign", "_liked_by", "_seen")`. Khi doctype không bật tính năng tương ứng (vd `track_seen`), `db_query` gỡ field "tuỳ chọn" khỏi danh sách cột — kiểm theo chuỗi con, nên `last_seen_at` bị gỡ nhầm.
 - **Fix Applied**: Đổi tên field thành `last_beat_at` (JSON + code + test), migrate, test 24/24 xanh.
 - **Prevention Rule**: Không đặt fieldname chứa `_seen`, `_assign`, `_comments`, `_liked_by`, `_user_tags`. Field "biến mất" khỏi kết quả `get_all` mà không lỗi → nghi ngay danh sách `optional_fields`. Kiểm bằng `frappe.get_all(dt, fields=[f], limit=1)` ngay sau khi tạo doctype.
+
+### [W34] [2026-10-27] Deploy app mới lên prod Frappe không có root: bẫy nhỏ khi làm qua SSH
+- **Target**: Service Boosting lên máy prod Frappe (bench + gunicorn do supervisor quản, không có sudo).
+- **Symptom / Root Cause / Fix**:
+  1. `ssh host 'bench …'` → "bench: command not found": shell không tương tác không nạp PATH người dùng → gọi đường dẫn đủ `~/.local/bin/bench`.
+  2. Code app trên prod đứng ở một nhánh feature cũ (cùng commit với main) → `git pull` trên nhánh đó không lấy main. Fix: `git fetch` → `git checkout main` → `git merge --ff-only origin/main`, in commit trước / sau.
+  3. Script chặn PR sai nhánh đích chép từ repo khác (đòi `develop`) trong repo chỉ có `main` → báo chặn sai. Kiểm lịch sử PR đã gộp trước khi tin script; sửa script cho khớp repo.
+  4. `pkill -f "deploy/serve.mjs"` trong cùng lệnh bash giết luôn chính shell đang chạy (chuỗi khớp dòng lệnh của shell) → exit 144, các bước sau không chạy. Dùng `pgrep -f "^/đường/dẫn/node deploy/serv[e].mjs"` (mẹo `[e]`) hoặc file pid.
+  5. Không có root để thêm server block nginx cho cổng riêng → server Node nhỏ (chỉ thư viện chuẩn) chạy bằng user app: phục vụ `dist/`, proxy `/api /app /assets /files /private` về gunicorn với `Host` + `X-Frappe-Site-Name`, websocket `/socket.io` về cổng socketio. Build app vào thư mục khác `/assets/` (vd `sb-assets`) để không đụng asset của Desk.
+- **Prevention Rule**: Trước deploy: sao lưu DB, in commit trước / sau, kiểm role / bảng / số dòng dữ liệu cũ sau migrate, HUP gunicorn rồi gọi thử API mới (lỗi "cần đăng nhập" = hàm đã nạp; lỗi import = chưa). Không `pkill -f` bằng chuỗi có trong chính lệnh đang chạy.
+
