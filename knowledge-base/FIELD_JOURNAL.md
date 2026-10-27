@@ -419,6 +419,7 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
   2. Cột `sort_rank` theo giây sẽ tràn: **Frappe `Int` = `int(11)`**, không có BigInt → đổi sang phút.
   3. Booster/Farmer cần tải **ảnh riêng tư** gắn vào đơn → file private kiểm quyền `read` trên doctype đính kèm → phải cấp `read` doctype cho họ; hệ quả: REST `/api/resource` lộ `account_login`. Fix: field tài khoản khách `permlevel: 1`, chỉ role quản lý có quyền đọc permlevel 1; API tự kiểm (người được giao / quyền riêng). Password field Frappe luôn che, không lộ.
   4. `ruff check --fix --select RUF100` xoá cả `# noqa: S608` cần thiết sau khi `ruff format` dời comment → đặt lại noqa ở **dòng đầu** chuỗi 1 dòng / **dòng cuối** chuỗi nhiều dòng.
+  5b. Công cụ Write / Edit của agent đổi chuỗi thoát `"\ufe0f\u200d"` trong code Python thành **ký tự vô hình thật** → lệnh thay chuỗi sau đó không khớp, người đọc code không thấy gì. Kiểm bằng `grep -n … | cat -A`; sửa bằng script Python ghi lại dạng thoát `\\u…`.
   5. `test_action_access_coverage` đỏ sẵn trên `main` (module `booster_account` có `only_for` chưa vào manifest) — kiểm bằng `git stash` chạy lại trên `main` trước khi kết luận lỗi của mình.
 - **Prevention Rule**: So user luôn không phân biệt hoa/thường; fixture email viết thường. Cột số lớn trong Frappe: kiểm giới hạn `int(11)`. Cần cho người dùng xem file private của doctype → cấp `read` doctype + `permlevel 1` cho trường nhạy cảm, đừng nghĩ "chỉ cho ghi qua API" là đủ. Test đỏ ngoài phạm vi → chạy lại trên nhánh gốc để phân định.
 
