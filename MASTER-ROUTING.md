@@ -23,6 +23,8 @@ User Prompt
     │
     ├── [R8] Patch Content.ggpk / PoeRedux / màn hình đen / treo sau patch? ─► skills/ggpk-file-patching/
     │
+    ├── [R9] Frappe danh sách lớn / phân trang / KPI chậm / doctype 10k+ dòng? ► skills/frappe-large-list-query/
+    │
     └── [R7] Unknown edge case / Bug resolved / Lesson learned? ────────────► skills/self-evolving-knowledge-base/
 ```
 
@@ -57,6 +59,10 @@ User Prompt
 #### `[R6] Trade Buyer & Stash Automation`
 - **Triggers**: ShopAutoBuyer window recognition, Currency Exchange collector, StashDepositService item clicks, Trade API rate limits.
 - **Skill**: `.agents/skills/trade-buyer-diagnostics/SKILL.md`
+
+#### `[R9] Frappe Large List Query`
+- **Triggers**: trang danh sách / tab / KPI / phân trang / tìm kiếm trên doctype Frappe nhiều dòng; "Frappe có chịu nổi N dòng không"; deep page chậm; cache Frappe không trúng; thiết kế mã trạng thái 0/1, 1..n + bảng danh mục.
+- **Skill**: `.agents/skills/frappe-large-list-query/SKILL.md`
 
 #### `[R7] Self-Evolving Knowledge Base`
 - **Triggers**: Logging a fixed bug, recording a newly discovered offset pattern, updating `FIELD_JOURNAL.md`.

@@ -76,6 +76,7 @@ agent-skill/
 | **`boss-encounter-tuning`** | Boss state machines & encounter tuning | Exarch, Eater, Maven, Feared, King timing |
 | **`single-file-packager-deployment`** | Packaging standalone executables | AutoBoss_AllInOne.exe, AutoBuyer_AllInOne.exe |
 | **`trade-buyer-diagnostics`** | Shop, trade, & stash deposit automation | ShopAutoBuyer, Faustus Exchange, WebSockets |
+| **`frappe-large-list-query`** | Frappe/MariaDB list for 10k–100k+ rows, ~20 rows read per page | Numeric codes + lookup doctype, sort_rank, done_seq, keyset, cache `expires=True` |
 | **`self-evolving-knowledge-base`** | Experience logging & regression prevention | FIELD_JOURNAL.md post-mortem registry |
 
 ---
