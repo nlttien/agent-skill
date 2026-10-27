@@ -77,6 +77,24 @@ Chi tiết từng bước + số liệu: `knowledge-base/FIELD_JOURNAL.md` [W29]
     hoặc patch. DDL trong code: `frappe.db.sql_ddl` / `add_index` (lệnh `ALTER` qua `frappe.db.sql` →
     `ImplicitCommitError`).
 
+## ⏱️ Chi phí ORM Frappe (đo 2026-10-27, Frappe v15 local, doctype ~60 cột, 1 lần gọi)
+| Cách | ms/lần | Ghi chú |
+|---|---|---|
+| `frappe.db.sql` 3 cột | 0,18 | nhanh nhất |
+| `frappe.db.get_value` 3 cột | 0,41 | |
+| `frappe.get_doc` cả đơn | 1,05 | đọc mọi cột + bảng con |
+| `get_doc` + `save()` | 7,9 | validate + hook + **Version** (track_changes) |
+| như trên, tắt `track_changes` | 4,8 | Version tốn ~3 ms + 1 dòng JSON / lần lưu |
+| `frappe.db.set_value` 1 cột | 0,43 | bỏ qua validate / hook / Version |
+| `get_doc(...).insert()` 1 dòng log | 1,74 | |
+| `frappe.db.bulk_insert` 100 dòng | 11 (≈ 0,11 / dòng) | nhanh ~16 lần / dòng |
+
+Quy tắc: **ORM (`get_doc` + `save`) cho thao tác nghiệp vụ** (bấm nút, vài lần / giây — cần validate, khoá dòng,
+hook); **SQL / `get_value` / `get_all(fields=…)` cho đọc**; **`set_value` / `UPDATE` cho cột nóng** (nhịp máy mỗi phút,
+bộ đếm); **`bulk_insert` cho ghi hàng loạt** (log, bảng thống kê). Doctype đã có bảng log riêng → cân nhắc tắt
+`track_changes` (đỡ 1 dòng Version JSON mỗi lần lưu). Đo số câu SQL / request: `SHOW SESSION STATUS LIKE 'Questions'`
+trước / sau, hoặc Recorder trong Desk.
+
 ## 📏 Đo số dòng DB thực đọc (kiểm chứng "chỉ quét 20")
 ```python
 def rows_read(fn):
