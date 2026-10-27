@@ -114,7 +114,7 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 ### [W6] Quy hoạch repo Acc Manager (10-2026)
 - Repo chính FE từ 2026-10-10: **GegeTeamCode/Account-manager** (đã đủ 4 tab: Booster Accounts / Outlook Mail / Aion 2 / Steam Accounts). Thư mục FE trên máy prod đã trỏ origin sang repo này, chạy branch `port/booster-session` (PR #1 chờ merge; sau merge đổi sang `main`).
 - Repo cũ `nlttien/Custom-UI-GeGe-Currency` = archive, không làm việc nữa.
-- BE vẫn repo `GegeTeamCode/frappe-erp15-gegecurrency` branch `feat/booster-account-mgmt`, sửa trực tiếp trên máy prod rồi commit push; thay đổi doctype → `bench migrate` + `supervisorctl restart`.
+- ~~BE vẫn repo `GegeTeamCode/frappe-erp15-gegecurrency`~~ — **cập nhật 2026-10-18**: BE (app `gege_custom`) đã tách sang repo private `GegeTeamCode/Account-manager-backend` (nhánh `main` = bản chạy trên prod). KHÔNG dùng `frappe-erp15-gegecurrency` nữa. Thay đổi doctype → `bench migrate` (hỏi owner trước, máy prod) + nạp lại bằng HUP gunicorn master (không cần sudo).
 - Người phụ trách Aion 2: field `assigned_to` (Link User) trên character; set 1 lần cập nhật toàn bộ character cùng email (như PC/Player/Gearup); FE badge 🛡️ tím trên header nhóm.
 - Component pattern của repo: `components/booster/` — modal dùng `v-model` + props dữ liệu + emit `changed`/`saved` về view refresh; logic mức dòng ở `composables/useBoosterRow.js`, mail ở `useBoosterMailSync.js`.
 - Chống mìn tương lai: mỗi lần refactor xong PHẢI browser-verify từng route; PR nhỏ theo chặng, gate `lint → build → prettier → format:check → test` trước mỗi push.
@@ -369,6 +369,24 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
 - **Fix Applied**: Dùng registry quyền sẵn có của repo (`FUNCTION_ROLES` + doctype ghi đè theo role) cho 3 quyền xem / xem mật khẩu / quản lý; serializer chỉ giải mã mật khẩu khi có quyền. Aion 2 chia 3 mức đọc / cập nhật số liệu / admin, mỗi hàm whitelisted gọi `_require_*` ở dòng đầu. API trả `perms` để FE ẩn nút; FE giữ hành vi cũ khi backend chưa trả `perms` (deploy lệch thứ tự không khoá ai). Test `FrappeTestCase` cho từng mức.
 - **Bẫy quy trình**: (1) Trước khi siết quyền trên hệ thống thật, liệt kê (chỉ đọc) những user đã sửa dữ liệu gần đây và mô phỏng quy tắc mới cho từng người — phát hiện một người đang làm việc hằng ngày sẽ bị khoá. (2) Job lint của repo chạy pre-commit trên TOÀN repo; nhánh vốn đã đỏ vì file cũ. Chỉ định dạng file mình sửa, so lỗi trước/sau để không nhận nhầm lỗi cũ là của mình.
 - **Prevention Rule**: Mỗi `@frappe.whitelist()` mới phải có dòng kiểm quyền đầu hàm và test "user không quyền → PermissionError"; FE ẩn nút chỉ là UX. Không bao giờ trả trường password đã giải mã khi chưa kiểm quyền riêng cho nó. Đổi tên bằng SQL thì truy vấn link field lúc chạy (hoặc liệt kê và có test), không ghi "không có link nào" vào comment. Upsert theo khoá phải gồm cả loại bản ghi. Seed mặc định chỉ khi bảng trống.
+
+### [W27] [2026-10-27] Lên plan doctype cho module mới (Service Boosting) khi chưa có spec — khung thiết kế chuẩn cho `gege_custom`
+- **Target**: app Frappe `gege_custom` (repo `GegeTeamCode/Account-manager-backend`), module mới "Service Boosting" (đơn cày thuê). Plan: `~/Projects/Service Boosting/PLAN-frappe-doctype.md`.
+- **Symptom**: Owner yêu cầu "lên plan tạo doctype" cho một thư mục mới tạo, **trống**; không repo nào có mô tả nghiệp vụ. Đọc thẳng máy prod .113 để xem doctype hiện có bị chế độ auto chặn (Production Reads).
+- **Root Cause**: Module mới chưa có tài liệu; nếu đoán phạm vi rồi code ngay sẽ phải đập lại. Nguồn sự thật về schema nằm trên prod, không đọc trực tiếp được.
+- **Fix Applied**:
+  1. Đọc schema qua GitHub thay vì SSH prod: `gh api repos/GegeTeamCode/Account-manager-backend/git/trees/main?recursive=1` để liệt kê doctype, `gh api .../contents/<path>.json` + base64 decode để xem field. Repo `main` = bản đang chạy trên .113.
+  2. Viết plan dạng BẢN NHÁP: nêu rõ giả định, danh sách field, quy tắc server, các bước, và mục "Câu hỏi cần chốt" — không code trước khi owner trả lời.
+  3. Khung thiết kế chốt cho doctype nghiệp vụ mới trong `gege_custom`:
+     - Dùng lại master có sẵn (`Game Title`, `Game Context`, `Channel`, `Customer`, `User`, `Currency`, `Booster Account`), không tạo trùng.
+     - Doctype chính nhân viên đọc mã → naming series (`BO-.YYYY.-.#####`), không `hash`.
+     - Trạng thái dùng `workflow_state` Select + sơ đồ chuyển trạng thái trong code (giống `Sell Order`), không submittable.
+     - Nhật ký tiến độ/hoạt động = **doctype riêng Link về đơn**, không child table (child table lưu lại cả parent → nhiều người ghi đồng thời đè nhau, mất người/giờ ghi).
+     - Danh mục admin tự thêm → Link/Data, không Select (W15). Danh sách cố định (đơn vị tính, chế độ) → Select được.
+     - Mật khẩu tài khoản khách → field `Password` + chỉ giải mã khi có quyền riêng (W26).
+     - Quyền theo dòng (booster chỉ thấy đơn của mình) đặt ở server: `permission_query_conditions` + `has_permission` trong `hooks.py` và lọc trong API list.
+     - Khi module mới dùng tài nguyên chung (Booster Account), đổi trạng thái tài nguyên trong cùng API chuyển trạng thái đơn và chặn khi tài nguyên đang bận.
+- **Prevention Rule**: Thư mục/module mới trống = chưa có spec → ra plan nháp có giả định + câu hỏi, không tự đoán rồi code. Cần schema prod mà SSH bị chặn → đọc repo backend qua `gh api` (main = bản prod). `bench migrate` thêm doctype trên .113 là thao tác prod — hỏi owner trước dù chỉ thêm bảng.
 
 ### [R6] [2026-10-14] "vtable gần nhất phía trước" không phải chủ của ô nhớ: offset đúng nhờ trùng hợp, sang cửa sổ khác thì gãy
 - **Target**: con trỏ "tab đang mở" (`tools/tab_live.py`, `relocate.py active`), PoE.
