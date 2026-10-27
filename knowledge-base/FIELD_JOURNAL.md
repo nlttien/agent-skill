@@ -652,3 +652,12 @@ This log preserves real bug fixes, memory behaviors, and architectural solutions
   5. Không có root để thêm server block nginx cho cổng riêng → server Node nhỏ (chỉ thư viện chuẩn) chạy bằng user app: phục vụ `dist/`, proxy `/api /app /assets /files /private` về gunicorn với `Host` + `X-Frappe-Site-Name`, websocket `/socket.io` về cổng socketio. Build app vào thư mục khác `/assets/` (vd `sb-assets`) để không đụng asset của Desk.
 - **Prevention Rule**: Trước deploy: sao lưu DB, in commit trước / sau, kiểm role / bảng / số dòng dữ liệu cũ sau migrate, HUP gunicorn rồi gọi thử API mới (lỗi "cần đăng nhập" = hàm đã nạp; lỗi import = chưa). Không `pkill -f` bằng chuỗi có trong chính lệnh đang chạy.
 
+
+### [W35] [2026-10-28] Frappe socketio sau proxy riêng: xác thực gọi lại `Origin + /api` → Origin phải phân giải được
+- **Target**: app Vue riêng chạy sau một proxy Node nhỏ (cổng riêng, không nginx) trên prod Frappe v15; muốn realtime (`publish_realtime`).
+- **Symptom**: socket.io nối được (bắt tay polling 200) nhưng vào namespace site thì nhận `44/<site>,{"message":"Unauthorized: Error: getaddrinfo ENOTFOUND <site>"}` → không bao giờ nhận sự kiện; trang chỉ còn tự tải lại định kỳ, không ai thấy lỗi.
+- **Root Cause**:
+  1. `realtime/middlewares/authenticate.js` đòi tên máy của `Host` == của `Origin`, rồi gọi `superagent.get(Origin + "/api/method/frappe.realtime.get_user_info?sid=…")` (`realtime/utils.js get_url`). Proxy đặt `Origin: http://<tên site>` — tên site (vd `erp.local`) chỉ là tên Frappe, không có trong DNS / `/etc/hosts` của máy prod → lời gọi xác thực hỏng.
+  2. Phụ: `publish_realtime(event, msg)` không truyền `room` → phòng site, mà socket chỉ join phòng site khi `user_type == "System User"`. User chỉ có role `desk_access=0` (Website User) không nhận.
+- **Fix Applied**: proxy đặt `Host` + `Origin` của kết nối socketio = chính nó (`127.0.0.1:<cổng proxy>`), giữ `X-Frappe-Site-Name` = site (namespace khớp). Lời gọi xác thực quay về proxy → proxy chuyển `/api` tới gunicorn với header site đúng. Sự kiện app gửi qua 1 hàm `notify` → `publish_realtime(..., room="website", after_commit=True)`, chỉ mang tên bản ghi.
+- **Prevention Rule**: Sau khi dựng proxy cho socketio, thử bắt tay đủ 3 bước (GET mở → POST `40/<site>,` → GET đọc) với cookie `sid=Guest`. Phải nhận `40/<site>,{"sid":…}`, không được nhận `44`. Phép thử này không cần đăng nhập, an toàn trên prod. Origin gửi socketio luôn là địa chỉ mà chính máy chạy socketio gọi lại được. Sự kiện cho app không dành riêng System User → truyền `room` rõ ràng.
